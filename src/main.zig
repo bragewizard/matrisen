@@ -1,16 +1,13 @@
 const std = @import("std");
-const Engine = @import("engine.zig");
-const lua = @import("scripting.zig");
+const graphics = @import("vulkan/core.zig");
+const c = @import("clibs.zig");
+const Window = @import("window.zig");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer if (gpa.deinit() == .leak) {
-        @panic("Leaked memory");
-    };
+    const gpa = std.heap.page_allocator;
 
-    var engine = Engine.init(gpa.allocator());
-    defer engine.cleanup();
-
-    lua.register_lua_functions(&engine); // This must be called after the engine is initialized for &engine to be correct
-    engine.run();
+    const window_extent = c.VkExtent2D{ .width = 1600, .height = 900 };
+    var win = Window.init(window_extent);
+    defer win.deinit();
+    graphics.run(gpa, &win);
 }
