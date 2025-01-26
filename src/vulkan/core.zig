@@ -14,15 +14,16 @@ const Instance = @import("instance.zig");
 const log = std.log.scoped(.core);
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
+const Swapchain = @import("swapchain.zig").Swapchain;
 
 // container level variables
 pub const vk_alloc_cbs: ?*c.VkAllocationCallbacks = null;
 const FRAME_OVERLAP = 2;
-var render_scale = 1.0;
 const Self = @This();
 
 // member variables
 resize_request: bool = false,
+render_scale: f32 = 1.0,
 window_extent: c.VkExtent2D = undefined,
 depth_image: t.AllocatedImageAndView = undefined,
 depth_image_format: c.VkFormat = undefined,
@@ -38,6 +39,7 @@ instance: Instance = undefined,
 physical_device: PhysicalDevice = undefined,
 device: Device = undefined,
 surface: c.VkSurfaceKHR = undefined,
+swapchain: Swapchain = undefined,
 immidiate_fence: c.VkFence = null,
 immidiate_command_buffer: c.VkCommandBuffer = null,
 immidiate_command_pool: c.VkCommandPool = null,
@@ -72,8 +74,8 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     }
     if (window) |w| {
         w.create_surface(engine.instance.handle, &engine.surface);
-        defer c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vk_alloc_cbs);
     }
+    defer c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vk_alloc_cbs);
     engine.physical_device = PhysicalDevice.select(init_allocator.allocator(), engine.instance.handle, engine.surface) catch {
         log.err("buhu", .{});
         unreachable;
@@ -84,16 +86,16 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     };
     defer c.vkDestroyDevice(engine.device.handle, vk_alloc_cbs);
 
-    // const allocator_ci = std.mem.zeroInit(c.VmaAllocatorCreateInfo, .{
-    //     .physicalDevice = engine.gpu,
-    //     .device = engine.device,
-    //     .instance = engine.instance,
-    //     .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-    // });
-    // check_vk(c.vmaCreateAllocator(&allocator_ci, &engine.gpu_allocator)) catch @panic("Failed to create VMA allocator");
-    // defer c.vmaDestroyAllocator(self.gpu_allocator);
+    const allocator_ci = std.mem.zeroInit(c.VmaAllocatorCreateInfo, .{
+        .physicalDevice = engine.physical_device.handle,
+        .device = engine.device.handle,
+        .instance = engine.instance.handle,
+        .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    });
+    check_vk(c.vmaCreateAllocator(&allocator_ci, &engine.gpu_allocator)) catch @panic("Failed to create VMA allocator");
+    defer c.vmaDestroyAllocator(engine.gpu_allocator);
 
-    // engine.init_swapchain();
+    // engine.swapchain = 
     // engine.init_commands();
     // engine.init_sync_structures();
     // engine.init_descriptors();
@@ -158,8 +160,8 @@ fn draw(self: *Self) void {
         .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     });
 
-    self.draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(self.swapchain_extent.width, self.draw_image_extent.width))) * render_scale);
-    self.draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(self.swapchain_extent.height, self.draw_image_extent.height))) * render_scale);
+    self.draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(self.swapchain_extent.width, self.draw_image_extent.width))) * self.render_scale);
+    self.draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(self.swapchain_extent.height, self.draw_image_extent.height))) * self.render_scale);
 
     check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
 

@@ -3,8 +3,6 @@ const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
 const create_image_view = @import("image.zig").create_image_view;
 
-// const gpu = @import("core").physical_device;
-
 pub const SwapchainSupportInfo = struct {
     capabilities: c.VkSurfaceCapabilitiesKHR = undefined,
     formats: []c.VkSurfaceFormatKHR = &.{},

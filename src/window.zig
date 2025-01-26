@@ -7,8 +7,11 @@ const Self = @This();
 sdl_window: *c.SDL_Window,
 
 pub fn init(window_extent: c.VkExtent2D) Self {
+    // zig fmt: off
     check_sdl_bool(c.SDL_Init(c.SDL_INIT_VIDEO));
-    const window = c.SDL_CreateWindow("matrisen", @intCast(window_extent.width), @intCast(window_extent.height), c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_UTILITY) orelse @panic("Failed to create SDL window"); //c.SDL_WINDOW_UTILITY
+    const flags = c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_UTILITY;
+    const window = c.SDL_CreateWindow("matrisen", @intCast(window_extent.width), @intCast(window_extent.height), flags)
+    orelse @panic("Failed to create SDL window");
     check_sdl_bool(c.SDL_ShowWindow(window));
     return .{ .sdl_window = window };
 }
@@ -42,7 +45,6 @@ pub fn create_surface(self: *Self, instance: c.VkInstance, surface: *c.VkSurface
 //         else => {}
 //     }
 // }
-
 
 pub fn check_sdl(res: c_int) void {
     if (res != 0) {
