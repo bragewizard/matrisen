@@ -3,15 +3,13 @@ const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
 const log = std.log.scoped(.instance);
 
-
-pub const api_version = c.VK_MAKE_VERSION(1,3,0);
+pub const api_version = c.VK_MAKE_VERSION(1, 3, 0);
 const Instance = @This();
 
 handle: c.VkInstance = null,
 debug_messenger: c.VkDebugUtilsMessengerEXT = null,
 
 pub fn create(alloc: std.mem.Allocator) !Instance {
-
     var sdl_required_extension_count: u32 = undefined;
     const sdl_extensions = c.SDL_Vulkan_GetInstanceExtensions(&sdl_required_extension_count);
     const sdl_extension_slice = sdl_extensions[0..sdl_required_extension_count];
@@ -107,11 +105,9 @@ pub fn create(alloc: std.mem.Allocator) !Instance {
     return .{ .handle = instance, .debug_messenger = debug_messenger };
 }
 
-
 pub fn get_destroy_debug_utils_messenger_fn(instance: Instance) c.PFN_vkDestroyDebugUtilsMessengerEXT {
     return get_vulkan_instance_funct(c.PFN_vkDestroyDebugUtilsMessengerEXT, instance.handle, "vkDestroyDebugUtilsMessengerEXT");
 }
-
 
 pub fn default_debug_callback(
     severity: c.VkDebugUtilsMessageSeverityFlagBitsEXT,
@@ -155,7 +151,7 @@ fn get_vulkan_instance_funct(comptime Fn: type, instance: c.VkInstance, name: [*
     @panic("SDL_Vulkan_GetVkGetInstanceProcAddr returned null");
 }
 
-fn create_debug_callback(instance: c.VkInstance, debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT, alloc_cb:?*c.VkAllocationCallbacks) !c.VkDebugUtilsMessengerEXT {
+fn create_debug_callback(instance: c.VkInstance, debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT, alloc_cb: ?*c.VkAllocationCallbacks) !c.VkDebugUtilsMessengerEXT {
     const create_fn_opt = get_vulkan_instance_funct(c.PFN_vkCreateDebugUtilsMessengerEXT, instance, "vkCreateDebugUtilsMessengerEXT");
     if (create_fn_opt) |create_fn| {
         const create_info = std.mem.zeroInit(c.VkDebugUtilsMessengerCreateInfoEXT, .{

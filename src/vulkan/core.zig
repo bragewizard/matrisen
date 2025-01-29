@@ -4,12 +4,15 @@ const lua = @import("scripting.zig");
 const check_vk = @import("debug.zig").check_vk;
 const transition_image = @import("image.zig").transition_image;
 const copy_image_to_image = @import("image.zig").copy_image_to_image;
-const d = @import("descriptors.zig");
 const c = @import("../clibs.zig");
-const m = @import("../3Dmath.zig");
 const Window = @import("../window.zig");
+const Mat4 = @import("../3Dmath.zig").Mat4;
+const DescriptorAllocatorGrowable = @import("descriptors.zig").DescriptorAllocatorGrowable;
+const DescriptorWriter = @import("descriptors.zig").DescriptorWriter;
+const AllocatedBuffer = @import("types.zig").AllocatedBuffer;
+const GPUSceneData = @import("types.zig").GPUSceneData;
+const GPUDrawPushConstants = @import("types.zig").GPUDrawPushConstants;
 const PipelineBuilder = @import("pipelinebuilder.zig");
-const t = @import("types.zig");
 const Instance = @import("instance.zig");
 const log = std.log.scoped(.core);
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
@@ -24,15 +27,6 @@ const Self = @This();
 // member variables
 resize_request: bool = false,
 render_scale: f32 = 1.0,
-window_extent: c.VkExtent2D = undefined,
-depth_image: t.AllocatedImageAndView = undefined,
-depth_image_format: c.VkFormat = undefined,
-depth_image_extent: c.VkExtent3D = undefined,
-draw_image: t.AllocatedImageAndView = undefined,
-draw_image_format: c.VkFormat = undefined,
-draw_image_extent: c.VkExtent3D = undefined,
-draw_extent: c.VkExtent2D = undefined,
-
 cpu_allocator: std.mem.Allocator = undefined,
 gpu_allocator: c.VmaAllocator = undefined,
 instance: Instance = undefined,
@@ -43,10 +37,10 @@ swapchain: Swapchain = undefined,
 immidiate_fence: c.VkFence = null,
 immidiate_command_buffer: c.VkCommandBuffer = null,
 immidiate_command_pool: c.VkCommandPool = null,
-frames: [FRAME_OVERLAP]t.FrameData = .{t.FrameData{}} ** FRAME_OVERLAP,
+frames: [FRAME_OVERLAP]FrameData = .{FrameData{}} ** FRAME_OVERLAP,
 frame_number: u32 = 0,
 // descriptors
-global_descriptor_allocator: d.DescriptorAllocatorGrowable = undefined,
+global_descriptor_allocator: DescriptorAllocatorGrowable = undefined,
 draw_image_descriptors: c.VkDescriptorSet = undefined,
 draw_image_descriptor_layout: c.VkDescriptorSetLayout = undefined,
 gradient_pipeline_layout: c.VkPipelineLayout = null,
@@ -59,43 +53,57 @@ mesh_pipeline_layout: c.VkPipelineLayout = null,
 mesh_pipeline: c.VkPipeline = null,
 lua_state: ?*c.lua_State = undefined,
 
+pub const FrameData = struct {
+    swapchain_semaphore: c.VkSemaphore = null,
+    render_semaphore: c.VkSemaphore = null,
+    render_fence: c.VkFence = null,
+    command_pool: c.VkCommandPool = null,
+    main_command_buffer: c.VkCommandBuffer = null,
+    frame_descriptors: DescriptorAllocatorGrowable = DescriptorAllocatorGrowable{},
+};
+
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     var engine = Self{};
     engine.cpu_allocator = allocator;
-    var init_allocator = std.heap.ArenaAllocator.init(engine.cpu_allocator);
-    engine.lua_state = c.luaL_newstate();
-    defer c.lua_close(engine.lua_state);
-    lua.register_lua_functions(&engine);
-    engine.instance = Instance.create(init_allocator.allocator()) catch @panic("failed to create instance");
-    defer c.vkDestroyInstance(engine.instance.handle, vk_alloc_cbs);
-    if (engine.instance.debug_messenger != null) {
-        const destroy_fn = engine.instance.get_destroy_debug_utils_messenger_fn().?;
-        defer destroy_fn(engine.instance.handle, engine.instance.debug_messenger, vk_alloc_cbs);
+    {
+        var init_allocator = std.heap.ArenaAllocator.init(engine.cpu_allocator);
+        defer init_allocator.deinit();
+        engine.lua_state = c.luaL_newstate();
+        defer c.lua_close(engine.lua_state);
+        lua.register_lua_functions(&engine);
+        engine.instance = Instance.create(init_allocator.allocator()) catch @panic("failed to create instance");
+        defer c.vkDestroyInstance(engine.instance.handle, vk_alloc_cbs);
+        if (engine.instance.debug_messenger != null) {
+            const destroy_fn = engine.instance.get_destroy_debug_utils_messenger_fn().?;
+            defer destroy_fn(engine.instance.handle, engine.instance.debug_messenger, vk_alloc_cbs);
+        }
+        if (window) |w| {
+            w.create_surface(engine.instance.handle, &engine.surface);
+        }
+        defer c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vk_alloc_cbs);
+        engine.physical_device = PhysicalDevice.select(init_allocator.allocator(), engine.instance.handle, engine.surface) catch {
+            log.err("buhu", .{});
+            unreachable;
+        };
+        engine.device = Device.create(init_allocator.allocator(), engine.physical_device) catch {
+            log.err("buhu", .{});
+            unreachable;
+        };
+        defer c.vkDestroyDevice(engine.device.handle, vk_alloc_cbs);
+        engine.swapchain = Swapchain.create(init_allocator.allocator(), engine, window.?.extent) catch {
+            log.err("buhu", .{});
+            unreachable;
+        };
+        defer engine.swapchain.deinit(engine.device.handle);
+        const allocator_ci = std.mem.zeroInit(c.VmaAllocatorCreateInfo, .{
+            .physicalDevice = engine.physical_device.handle,
+            .device = engine.device.handle,
+            .instance = engine.instance.handle,
+            .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+        });
+        check_vk(c.vmaCreateAllocator(&allocator_ci, &engine.gpu_allocator)) catch @panic("Failed to create VMA allocator");
+        defer c.vmaDestroyAllocator(engine.gpu_allocator);
     }
-    if (window) |w| {
-        w.create_surface(engine.instance.handle, &engine.surface);
-    }
-    defer c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vk_alloc_cbs);
-    engine.physical_device = PhysicalDevice.select(init_allocator.allocator(), engine.instance.handle, engine.surface) catch {
-        log.err("buhu", .{});
-        unreachable;
-    };
-    engine.device = Device.create(init_allocator.allocator(), engine.physical_device) catch {
-        log.err("buhu", .{});
-        unreachable;
-    };
-    defer c.vkDestroyDevice(engine.device.handle, vk_alloc_cbs);
-
-    const allocator_ci = std.mem.zeroInit(c.VmaAllocatorCreateInfo, .{
-        .physicalDevice = engine.physical_device.handle,
-        .device = engine.device.handle,
-        .instance = engine.instance.handle,
-        .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
-    });
-    check_vk(c.vmaCreateAllocator(&allocator_ci, &engine.gpu_allocator)) catch @panic("Failed to create VMA allocator");
-    defer c.vmaDestroyAllocator(engine.gpu_allocator);
-
-    // engine.swapchain = 
     // engine.init_commands();
     // engine.init_sync_structures();
     // engine.init_descriptors();
@@ -118,18 +126,16 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     // defer c.vkDestroyFence(self.device, self.immidiate_fence, vk_alloc_cbs);
     // defer c.vkDestroyCommandPool(self.device, self.immidiate_command_pool, vk_alloc_cbs);
 
-    // defer c.vkDestroySwapchainKHR(self.device, self.swapchain, vk_alloc_cbs);
     // for (self.swapchain_image_views) |view| {
     //     defer c.vkDestroyImageView(self.device, view, vk_alloc_cbs);
     // }
     // self.cpu_allocator.free(self.swapchain_image_views);
     // self.cpu_allocator.free(self.swapchain_images);
 
-    init_allocator.deinit();
     // loop();
 }
 
-fn get_current_frame(self: *Self) *t.FrameData {
+fn get_current_frame(self: *Self) *FrameData {
     return &self.frames[@intCast(@mod(self.frame_number, FRAME_OVERLAP))];
 }
 
@@ -257,7 +263,7 @@ fn get_vulkan_instance_funct(self: *Self, comptime Fn: type, name: [*c]const u8)
 fn draw_background(self: *Self, cmd: c.VkCommandBuffer) void {
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, self.gradient_pipeline);
     c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_COMPUTE, self.gradient_pipeline_layout, 0, 1, &self.draw_image_descriptors, 0, null);
-    c.vkCmdPushConstants(cmd, self.gradient_pipeline_layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(t.ComputePushConstants), &self.pc);
+    // c.vkCmdPushConstants(cmd, self.gradient_pipeline_layout, c.VK_SHADER_STAGE_COMPUTE_BIT, 0, @sizeOf(t.ComputePushConstants), &self.pc);
     c.vkCmdDispatch(cmd, self.window_extent.width / 32, self.window_extent.height / 32, 1);
 }
 
@@ -292,18 +298,18 @@ fn draw_geometry(self: *Self, cmd: c.VkCommandBuffer) void {
         .pDepthAttachment = &depth_attachment,
     });
 
-    const gpu_scene_data_buffer = self.create_buffer(@sizeOf(t.GPUSceneData), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    const gpu_scene_data_buffer = self.create_buffer(@sizeOf(GPUSceneData), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
     var frame = self.get_current_frame();
     frame.buffer_deletion_queue.push(gpu_scene_data_buffer);
 
-    const scene_uniform_data: *t.GPUSceneData = @alignCast(@ptrCast(gpu_scene_data_buffer.info.pMappedData.?));
+    const scene_uniform_data: *GPUSceneData = @alignCast(@ptrCast(gpu_scene_data_buffer.info.pMappedData.?));
     scene_uniform_data.* = self.scene_data;
 
     const global_descriptor = frame.frame_descriptors.allocate(self.device, self.gpu_scene_data_descriptor_layout, null);
     {
-        var writer = d.DescriptorWriter.init(self.cpu_allocator);
+        var writer = DescriptorWriter.init(self.cpu_allocator);
         defer writer.deinit();
-        writer.write_buffer(0, gpu_scene_data_buffer.buffer, @sizeOf(t.GPUSceneData), 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.write_buffer(0, gpu_scene_data_buffer.buffer, @sizeOf(GPUSceneData), 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         writer.update_set(self.device, global_descriptor);
     }
 
@@ -320,7 +326,7 @@ fn draw_geometry(self: *Self, cmd: c.VkCommandBuffer) void {
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.mesh_pipeline);
     const image_set = self.get_current_frame().frame_descriptors.allocate(self.device, self.single_image_descriptor_layout, null);
     {
-        var writer = d.DescriptorWriter.init(self.cpu_allocator);
+        var writer = DescriptorWriter.init(self.cpu_allocator);
         defer writer.deinit();
         writer.write_image(0, self.error_checkerboard_image.view, self.default_sampler_nearest, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.update_set(self.device, image_set);
@@ -335,18 +341,18 @@ fn draw_geometry(self: *Self, cmd: c.VkCommandBuffer) void {
     });
 
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, std.math.pi / 2.0);
+    var view = Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, std.math.pi / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, std.math.pi);
     view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
-    const projection = m.Mat4.perspective(70.0, @as(f32, @floatFromInt(self.draw_extent.width)) / @as(f32, @floatFromInt(self.draw_extent.height)), 1000.0, 1.0);
-    var model = m.Mat4.mul(projection, view);
+    const projection = Mat4.perspective(70.0, @as(f32, @floatFromInt(self.draw_extent.width)) / @as(f32, @floatFromInt(self.draw_extent.height)), 1000.0, 1.0);
+    var model = Mat4.mul(projection, view);
     model.i.y *= -1.0;
-    var push_constants = t.GPUDrawPushConstants{
+    var push_constants = GPUDrawPushConstants{
         .model = model,
         .vertex_buffer = self.suzanne.items[0].mesh_buffers.vertex_buffer_adress,
     };
 
-    c.vkCmdPushConstants(cmd, self.mesh_pipeline_layout, c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(t.GPUDrawPushConstants), &push_constants);
+    c.vkCmdPushConstants(cmd, self.mesh_pipeline_layout, c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(GPUDrawPushConstants), &push_constants);
     c.vkCmdBindIndexBuffer(cmd, self.suzanne.items[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
     const surface = self.suzanne.items[0].surfaces.items[0];
     c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
@@ -422,113 +428,6 @@ pub fn immediate_submit(self: *Self, submit_ctx: anytype) void {
     check_vk(c.vkWaitForFences(self.device, 1, &self.immidiate_fence, c.VK_TRUE, 1_000_000_000)) catch @panic("Failed to wait for immidiate fence");
 }
 
-fn create_buffer(self: *Self, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage) t.AllocatedBuffer {
-    const buffer_info = std.mem.zeroInit(c.VkBufferCreateInfo, .{
-        .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = alloc_size,
-        .usage = usage,
-    });
-
-    const vma_alloc_info = std.mem.zeroInit(c.VmaAllocationCreateInfo, .{
-        .usage = memory_usage,
-        .flags = c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    });
-
-    var new_buffer: t.AllocatedBuffer = undefined;
-    check_vk(c.vmaCreateBuffer(self.gpu_allocator, &buffer_info, &vma_alloc_info, &new_buffer.buffer, &new_buffer.allocation, &new_buffer.info)) catch @panic("Failed to create buffer");
-    return new_buffer;
-}
-
-pub fn upload_mesh(self: *Self, indices: []u32, vertices: []t.Vertex) t.GPUMeshBuffers {
-    const index_buffer_size = @sizeOf(u32) * indices.len;
-    const vertex_buffer_size = @sizeOf(t.Vertex) * vertices.len;
-
-    var new_surface: t.GPUMeshBuffers = undefined;
-    new_surface.vertex_buffer = self.create_buffer(vertex_buffer_size, c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-        c.VK_BUFFER_USAGE_TRANSFER_DST_BIT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, c.VMA_MEMORY_USAGE_GPU_ONLY);
-
-    const device_address_info = std.mem.zeroInit(c.VkBufferDeviceAddressInfo, .{
-        .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = new_surface.vertex_buffer.buffer,
-    });
-
-    new_surface.vertex_buffer_adress = c.vkGetBufferDeviceAddress(self.device, &device_address_info);
-    new_surface.index_buffer = self.create_buffer(index_buffer_size, c.VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-        c.VK_BUFFER_USAGE_TRANSFER_DST_BIT, c.VMA_MEMORY_USAGE_GPU_ONLY);
-
-    const staging = self.create_buffer(index_buffer_size + vertex_buffer_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_ONLY);
-    defer c.vmaDestroyBuffer(self.gpu_allocator, staging.buffer, staging.allocation);
-
-    const data: *anyopaque = staging.info.pMappedData.?;
-
-    const byte_data = @as([*]u8, @ptrCast(data));
-    @memcpy(byte_data[0..vertex_buffer_size], std.mem.sliceAsBytes(vertices));
-    @memcpy(byte_data[vertex_buffer_size..], std.mem.sliceAsBytes(indices));
-    const submit_ctx = struct {
-        vertex_buffer: c.VkBuffer,
-        index_buffer: c.VkBuffer,
-        staging_buffer: c.VkBuffer,
-        vertex_buffer_size: usize,
-        index_buffer_size: usize,
-        fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
-            const vertex_copy_region = std.mem.zeroInit(c.VkBufferCopy, .{
-                .srcOffset = 0,
-                .dstOffset = 0,
-                .size = sself.vertex_buffer_size,
-            });
-
-            const index_copy_region = std.mem.zeroInit(c.VkBufferCopy, .{
-                .srcOffset = sself.vertex_buffer_size,
-                .dstOffset = 0,
-                .size = sself.index_buffer_size,
-            });
-
-            c.vkCmdCopyBuffer(cmd, sself.staging_buffer, sself.vertex_buffer, 1, &vertex_copy_region);
-            c.vkCmdCopyBuffer(cmd, sself.staging_buffer, sself.index_buffer, 1, &index_copy_region);
-        }
-    }{
-        .vertex_buffer = new_surface.vertex_buffer.buffer,
-        .index_buffer = new_surface.index_buffer.buffer,
-        .staging_buffer = staging.buffer,
-        .vertex_buffer_size = vertex_buffer_size,
-        .index_buffer_size = index_buffer_size,
-    };
-    self.immediate_submit(submit_ctx);
-    return new_surface;
-}
-
-fn init_commands(self: *Self) void {
-    const command_pool_ci = std.mem.zeroInit(c.VkCommandPoolCreateInfo, .{
-        .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = self.graphics_queue_family,
-    });
-
-    for (&self.frames) |*frame| {
-        check_vk(c.vkCreateCommandPool(self.device, &command_pool_ci, vk_alloc_cbs, &frame.command_pool)) catch log.err("Failed to create command pool", .{});
-
-        const command_buffer_ai = std.mem.zeroInit(c.VkCommandBufferAllocateInfo, .{
-            .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = frame.command_pool,
-            .level = c.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1,
-        });
-
-        check_vk(c.vkAllocateCommandBuffers(self.device, &command_buffer_ai, &frame.main_command_buffer)) catch @panic("Failed to allocate command buffer");
-
-        log.info("Created command pool and command buffer", .{});
-    }
-
-    check_vk(c.vkCreateCommandPool(self.device, &command_pool_ci, vk_alloc_cbs, &self.immidiate_command_pool)) catch @panic("Failed to create upload command pool");
-
-    const upload_command_buffer_ai = std.mem.zeroInit(c.VkCommandBufferAllocateInfo, .{
-        .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = self.immidiate_command_pool,
-        .level = c.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    });
-    check_vk(c.vkAllocateCommandBuffers(self.device, &upload_command_buffer_ai, &self.immidiate_command_buffer)) catch @panic("Failed to allocate upload command buffer");
-}
 
 fn init_sync_structures(self: *Self) void {
     const semaphore_ci = std.mem.zeroInit(c.VkSemaphoreCreateInfo, .{

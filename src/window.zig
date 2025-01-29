@@ -5,15 +5,14 @@ const vk_alloc_cbs = @import("vulkan/core.zig").vk_alloc_cbs;
 const Self = @This();
 
 sdl_window: *c.SDL_Window,
+extent: c.VkExtent2D,
 
 pub fn init(window_extent: c.VkExtent2D) Self {
-    // zig fmt: off
     check_sdl_bool(c.SDL_Init(c.SDL_INIT_VIDEO));
     const flags = c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_UTILITY;
-    const window = c.SDL_CreateWindow("matrisen", @intCast(window_extent.width), @intCast(window_extent.height), flags)
-    orelse @panic("Failed to create SDL window");
+    const window = c.SDL_CreateWindow("matrisen", @intCast(window_extent.width), @intCast(window_extent.height), flags) orelse @panic("Failed to create SDL window");
     check_sdl_bool(c.SDL_ShowWindow(window));
-    return .{ .sdl_window = window };
+    return .{ .sdl_window = window, .extent = window_extent };
 }
 
 pub fn deinit(self: *Self) void {

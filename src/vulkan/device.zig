@@ -2,6 +2,7 @@ const c = @import("../clibs.zig");
 const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
 const log = std.log.scoped(.device);
+const config = @import("config");
 const SwapchainSupportInfo = @import("swapchain.zig").SwapchainSupportInfo;
 const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
 const api_version = @import("instance.zig").api_version;
@@ -180,7 +181,6 @@ pub const PhysicalDevice = struct {
     }
 };
 
-
 pub const Device = struct {
     handle: c.VkDevice = null,
     graphics_queue: c.VkQueue = null,
@@ -189,7 +189,6 @@ pub const Device = struct {
     transfer_queue: c.VkQueue = null,
 
     pub fn create(alloc: std.mem.Allocator, physical_device: PhysicalDevice) !Device {
-
         const alloc_cb: ?*c.VkAllocationCallbacks = null;
 
         var features13 = std.mem.zeroInit(c.VkPhysicalDeviceVulkan13Features, .{
