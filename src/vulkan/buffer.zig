@@ -1,9 +1,3 @@
-
-
-
-
-
-
 fn create_buffer(self: *Self, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage) t.AllocatedBuffer {
     const buffer_info = std.mem.zeroInit(c.VkBufferCreateInfo, .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -75,6 +69,6 @@ pub fn upload_mesh(self: *Self, indices: []u32, vertices: []t.Vertex) t.GPUMeshB
         .vertex_buffer_size = vertex_buffer_size,
         .index_buffer_size = index_buffer_size,
     };
-    self.immediate_submit(submit_ctx);
+    self.async_submit(submit_ctx);
     return new_surface;
 }

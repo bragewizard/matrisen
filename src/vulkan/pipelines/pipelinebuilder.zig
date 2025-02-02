@@ -1,5 +1,6 @@
 const std = @import("std");
-const c = @import("../clibs.zig");
+const c = @import("../../clibs.zig");
+const check_vk = @import("../debug.zig");
 const log = std.log.scoped(.pipelines);
 
 const Self = @This();
@@ -201,4 +202,24 @@ pub fn enable_blending_alpha(self: *Self) void {
     self.color_blend_attachment.dstAlphaBlendFactor = c.VK_BLEND_FACTOR_ZERO;
     self.color_blend_attachment.alphaBlendOp = c.VK_BLEND_OP_ADD;
     self.color_blend_attachment.colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT | c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT;
+}
+
+pub fn create_shader_module(self: *Self, code: []const u8, alloc_callback: ?*c.VkAllocationCallbacks) ?c.VkShaderModule {
+    std.debug.assert(code.len % 4 == 0);
+
+    const data: *const u32 = @alignCast(@ptrCast(code.ptr));
+
+    const shader_module_ci = std.mem.zeroInit(c.VkShaderModuleCreateInfo, .{
+        .sType = c.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = code.len,
+        .pCode = data,
+    });
+
+    var shader_module: c.VkShaderModule = undefined;
+    check_vk(c.vkCreateShaderModule(self.device, &shader_module_ci, alloc_callback, &shader_module)) catch |err| {
+        log.err("Failed to create shader module with error: {s}", .{@errorName(err)});
+        return null;
+    };
+
+    return shader_module;
 }

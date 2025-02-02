@@ -24,6 +24,14 @@ pub fn create_surface(self: *Self, instance: c.VkInstance, surface: *c.VkSurface
     check_sdl_bool(c.SDL_Vulkan_CreateSurface(self.sdl_window, instance, vk_alloc_cbs, surface));
 }
 
+pub fn resize(self: *Self) void {
+    var width: c_int = undefined;
+    var height: c_int = undefined;
+    check_sdl_bool(c.SDL_GetWindowSize(self.sdl_window, &width, &height));
+    self.extent.width = @intCast(width);
+    self.extent.height = @intCast(height);
+}
+
 // pub fn handle_key_up(engine:*e, key_event: c.SDL_KeyboardEvent) void {
 //     switch (key_event.key) {
 //         c.SDLK_UP => {

@@ -1,6 +1,7 @@
 const c = @import("../clibs.zig");
 const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
+const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.instance);
 
 pub const api_version = c.VK_MAKE_VERSION(1, 3, 0);
@@ -9,7 +10,7 @@ const Instance = @This();
 handle: c.VkInstance = null,
 debug_messenger: c.VkDebugUtilsMessengerEXT = null,
 
-pub fn create(alloc: std.mem.Allocator) !Instance {
+pub fn create(alloc: std.mem.Allocator) Instance {
     var sdl_required_extension_count: u32 = undefined;
     const sdl_extensions = c.SDL_Vulkan_GetInstanceExtensions(&sdl_required_extension_count);
     const sdl_extension_slice = sdl_extensions[0..sdl_required_extension_count];
@@ -18,7 +19,7 @@ pub fn create(alloc: std.mem.Allocator) !Instance {
     // const engine_version = c.VK_MAKE_VERSION(0, 0, 1);
     if (api_version > c.VK_MAKE_VERSION(1, 0, 0)) {
         var api_requested = api_version;
-        try check_vk(c.vkEnumerateInstanceVersion(@ptrCast(&api_requested)));
+        check_vk_panic(c.vkEnumerateInstanceVersion(@ptrCast(&api_requested)));
     }
     var debug = true;
     const required_extensions = sdl_extension_slice;
@@ -27,14 +28,14 @@ pub fn create(alloc: std.mem.Allocator) !Instance {
 
     // Get supported layers and extensions
     var layer_count: u32 = undefined;
-    try check_vk(c.vkEnumerateInstanceLayerProperties(&layer_count, null));
-    const layer_props = try alloc.alloc(c.VkLayerProperties, layer_count);
-    try check_vk(c.vkEnumerateInstanceLayerProperties(&layer_count, layer_props.ptr));
+    check_vk_panic(c.vkEnumerateInstanceLayerProperties(&layer_count, null));
+    const layer_props = alloc.alloc(c.VkLayerProperties, layer_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+    check_vk_panic(c.vkEnumerateInstanceLayerProperties(&layer_count, layer_props.ptr));
 
     var extension_count: u32 = undefined;
-    try check_vk(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, null));
-    const extension_props = try alloc.alloc(c.VkExtensionProperties, extension_count);
-    try check_vk(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, extension_props.ptr));
+    check_vk_panic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, null));
+    const extension_props = alloc.alloc(c.VkExtensionProperties, extension_count) catch { log.err("failed to append", .{}); @panic(""); };
+    check_vk_panic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, extension_props.ptr));
 
     // Check if the validation layer is supported
     var layers = std.ArrayListUnmanaged([*c]const u8){};
@@ -43,7 +44,7 @@ pub fn create(alloc: std.mem.Allocator) !Instance {
             const layer_name: [*c]const u8 = @ptrCast(layer_prop.layerName[0..]);
             const validation_layer_name: [*c]const u8 = "VK_LAYER_KHRONOS_validation";
             if (std.mem.eql(u8, std.mem.span(validation_layer_name), std.mem.span(layer_name))) {
-                try layers.append(alloc, validation_layer_name);
+                layers.append(alloc, validation_layer_name) catch { log.err("failed to append", .{}); @panic(""); };
                 break :blk true;
             }
         } else false;
@@ -64,15 +65,15 @@ pub fn create(alloc: std.mem.Allocator) !Instance {
 
     for (required_extensions) |required_ext| {
         if (ExtensionFinder.find(required_ext, extension_props)) {
-            try extensions.append(alloc, required_ext);
+            extensions.append(alloc, required_ext) catch { log.err("failed to append", .{}); @panic(""); };
         } else {
             log.err("Required vulkan extension not supported: {s}", .{required_ext});
-            return error.vulkan_extension_not_supported;
+            @panic("");
         }
     }
 
     if (debug and ExtensionFinder.find("VK_EXT_debug_utils", extension_props)) {
-        try extensions.append(alloc, "VK_EXT_debug_utils");
+        extensions.append(alloc, "VK_EXT_debug_utils") catch { log.err("failed to append", .{}); @panic(""); };
     } else {
         debug = false;
     }
@@ -94,11 +95,11 @@ pub fn create(alloc: std.mem.Allocator) !Instance {
     });
 
     var instance: c.VkInstance = undefined;
-    try check_vk(c.vkCreateInstance(&instance_info, alloc_cb, &instance));
+    check_vk_panic(c.vkCreateInstance(&instance_info, alloc_cb, &instance));
     log.info("Created vulkan instance.", .{});
 
     const debug_messenger = if (debug)
-        try create_debug_callback(instance, debug_callback, alloc_cb)
+        create_debug_callback(instance, debug_callback, alloc_cb)
     else
         null;
 
@@ -133,7 +134,7 @@ pub fn default_debug_callback(
     };
 
     const message: [*c]const u8 = if (callback_data) |cb_data| cb_data.pMessage else "NO MESSAGE!";
-    log.err("[{s}][{s}]. Message:\n  {s}", .{ severity_str, type_str, message });
+    log.info("[{s}][{s}]. Message:\n  {s}", .{ severity_str, type_str, message });
 
     if (severity >= c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
         @panic("Unrecoverable vulkan error.");
@@ -151,7 +152,7 @@ fn get_vulkan_instance_funct(comptime Fn: type, instance: c.VkInstance, name: [*
     @panic("SDL_Vulkan_GetVkGetInstanceProcAddr returned null");
 }
 
-fn create_debug_callback(instance: c.VkInstance, debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT, alloc_cb: ?*c.VkAllocationCallbacks) !c.VkDebugUtilsMessengerEXT {
+fn create_debug_callback(instance: c.VkInstance, debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT, alloc_cb: ?*c.VkAllocationCallbacks) c.VkDebugUtilsMessengerEXT {
     const create_fn_opt = get_vulkan_instance_funct(c.PFN_vkCreateDebugUtilsMessengerEXT, instance, "vkCreateDebugUtilsMessengerEXT");
     if (create_fn_opt) |create_fn| {
         const create_info = std.mem.zeroInit(c.VkDebugUtilsMessengerCreateInfoEXT, .{
@@ -167,7 +168,7 @@ fn create_debug_callback(instance: c.VkInstance, debug_callback: c.PFN_vkDebugUt
             .pUserData = null,
         });
         var debug_messenger: c.VkDebugUtilsMessengerEXT = undefined;
-        try check_vk(create_fn(instance, &create_info, alloc_cb, &debug_messenger));
+        check_vk_panic(create_fn(instance, &create_info, alloc_cb, &debug_messenger));
         log.info("Created vulkan debug messenger.", .{});
         return debug_messenger;
     }

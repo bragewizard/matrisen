@@ -264,47 +264,47 @@ pub const DescriptorWriter = struct {
     }
 };
 
-// fn init_descriptors(self: *Self) void {
-//     var sizes = [_]d.DescriptorAllocatorGrowable.PoolSizeRatio{
-//         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
-//         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
-//     };
+fn init_descriptors(self: *Self) void {
+    var sizes = [_]d.DescriptorAllocatorGrowable.PoolSizeRatio{
+        .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
+        .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
+    };
 
-//     self.global_descriptor_allocator.init(self.device, 10, &sizes, self.cpu_allocator);
+    self.global_descriptor_allocator.init(self.device, 10, &sizes, self.cpu_allocator);
 
-//     {
-//         var builder = d.DescriptorLayoutBuilder{};
-//         builder.init(self.cpu_allocator);
-//         defer builder.deinit();
-//         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-//         self.draw_image_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
-//     }
-//     {
-//         var builder = d.DescriptorLayoutBuilder{};
-//         builder.init(self.cpu_allocator);
-//         defer builder.deinit();
-//         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-//         self.gpu_scene_data_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
-//     }
-//     {
-//         var builder = d.DescriptorLayoutBuilder{};
-//         builder.init(self.cpu_allocator);
-//         defer builder.deinit();
-//         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-//         self.single_image_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
-//     }
+    {
+        var builder = d.DescriptorLayoutBuilder{};
+        builder.init(self.cpu_allocator);
+        defer builder.deinit();
+        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        self.draw_image_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
+    }
+    {
+        var builder = d.DescriptorLayoutBuilder{};
+        builder.init(self.cpu_allocator);
+        defer builder.deinit();
+        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        self.gpu_scene_data_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    }
+    {
+        var builder = d.DescriptorLayoutBuilder{};
+        builder.init(self.cpu_allocator);
+        defer builder.deinit();
+        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        self.single_image_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    }
 
-//     self.draw_image_descriptors = self.global_descriptor_allocator.allocate(self.device, self.draw_image_descriptor_layout, null);
+    self.draw_image_descriptors = self.global_descriptor_allocator.allocate(self.device, self.draw_image_descriptor_layout, null);
 
-//     var writer = d.DescriptorWriter.init(self.cpu_allocator);
-//     defer writer.deinit();
-//     writer.write_image(0, self.draw_image.view, null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-//     writer.update_set(self.device, self.draw_image_descriptors);
+    var writer = d.DescriptorWriter.init(self.cpu_allocator);
+    defer writer.deinit();
+    writer.write_image(0, self.draw_image.view, null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    writer.update_set(self.device, self.draw_image_descriptors);
 
-//     for (&self.frames) |*frame| {
-//         var ratios = [_]d.DescriptorAllocatorGrowable.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
-//         frame.frame_descriptors.init(self.device, 1000, &ratios, self.cpu_allocator);
-//         frame.buffer_deletion_queue.init(self.cpu_allocator);
-//     }
-//     log.info("Initialized descriptors", .{});
-// }
+    for (&self.frames) |*frame| {
+        var ratios = [_]d.DescriptorAllocatorGrowable.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
+        frame.frame_descriptors.init(self.device, 1000, &ratios, self.cpu_allocator);
+        frame.buffer_deletion_queue.init(self.cpu_allocator);
+    }
+    log.info("Initialized descriptors", .{});
+}
