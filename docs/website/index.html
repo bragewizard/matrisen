@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Simple documentation website with Markdown support">
+    <title>Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#" onclick="loadMarkdown('section1.md')">Section 1</a></li>
+                <li><a href="#" onclick="loadMarkdown('section2.md')">Section 2</a></li>
+                <li><a href="#" onclick="loadMarkdown('section3.md')">Section 3</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <div id="content">
+            <section id="home">
+                <h1>Welcome to the Documentation</h1>
+                <p>This is a simple documentation website created with Markdown support.</p>
+                <h3>Warning!</h3>
+                <p>We are not graphic-designers or web-designers</p>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Documentation Website</p>
+    </footer>
+
+    <script>
+        function loadMarkdown(file) {
+            fetch(file)
+                .then(response => response.text())
+                .then(text => {
+                    const content = document.getElementById('content');
+                    content.innerHTML = marked.parse(text);
+                })
+                .catch(err => console.error('Error loading Markdown file:', err));
+        }
+    </script>
+</body>
+</html>
