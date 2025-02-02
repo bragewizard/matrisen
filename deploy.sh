@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Navigate to the root of the repository (assumes script is inside the `website` folder)
-cd ../../..
+cd ../..
 
 # Check if on the main branch
 CURRENT_BRANCH=$(git branch --show-current)
@@ -11,7 +11,7 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
 fi
 
 # Build a fresh commit with only the content of the website folder and push it to gh-pages branch
-git subtree split --prefix documents/documentation/website -b pages-deploy
+git subtree split --prefix docs/website -b pages-deploy
 
 # Force push the new subtree commit to the gh-pages branch
 git push origin pages-deploy:pages --force
