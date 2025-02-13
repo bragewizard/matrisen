@@ -34,7 +34,7 @@ pub fn loop(engine: *Core, window: *Window) void {
         }
         if (engine.frame_number % 100 == 0) {
             delta = timer.read();
-            log.info("FPS: {d}\x1b[1A", .{@as(u32, (@intFromFloat(100_000_000_000.0 / @as(f32, @floatFromInt(delta)))))});
+            log.info("FPS: {d}            \x1b[1A", .{@as(u32, (@intFromFloat(100_000_000_000.0 / @as(f32, @floatFromInt(delta)))))});
             timer.reset();
         }
         if (engine.resize_request) {

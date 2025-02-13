@@ -22,7 +22,7 @@ pub fn draw(core: *Core) void {
     var swapchain_image_index: u32 = undefined;
     var e = c.vkAcquireNextImageKHR(core.device.handle, core.swapchain.handle, timeout, frame.swapchain_semaphore, null, &swapchain_image_index);
     if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
-        log.warn("out of date", .{});
+        // log.warn("out of date", .{});
         core.resize_request = true;
         return;
     }
