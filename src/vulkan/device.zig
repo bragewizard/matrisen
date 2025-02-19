@@ -4,12 +4,12 @@ const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.device);
 const config = @import("config");
-const SwapchainSupportInfo = @import("swapchain.zig").SwapchainSupportInfo;
+const SwapchainSupportInfo = @import("swapchain.zig").SupportInfo;
 const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
 const api_version = @import("instance.zig").api_version;
 const required_device_extensions: []const [*c]const u8 = &.{
     "VK_KHR_swapchain",
-    "VK_NV_mesh_shader"
+    "VK_EXT_mesh_shader"
 };
 
 const PhysicalDeviceSelectionCriteria = enum {
@@ -216,8 +216,9 @@ pub const Device = struct {
             .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
             .pNext = &shader_draw_parameters_features,
         });
-        const meshshading = c.VkPhysicalDeviceMeshShaderFeaturesNV {
-            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
+
+        const meshshading = c.VkPhysicalDeviceMeshShaderFeaturesEXT {
+            .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
             .pNext = &deviceFeatures2,
             .taskShader = c.VK_TRUE,
             .meshShader = c.VK_TRUE,

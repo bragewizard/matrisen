@@ -1,13 +1,8 @@
-#version 450
+#version 460
 
-layout (location = 0) in PerVertexData
-{
-  vec4 color;
-} fragIn;
+layout(location = 0) out vec4 outColor;
 
-layout (location = 0) out vec4 FragColor;
-
-void main()
-{
-  FragColor = fragIn.color;
+void main() {
+    // Output a solid color for the triangle
+    outColor = vec4(1.0, 1.0, 1.0, 1.0); // Red color
 }

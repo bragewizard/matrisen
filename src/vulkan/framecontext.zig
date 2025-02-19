@@ -6,16 +6,16 @@ const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
 const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
 const c = @import("../clibs.zig");
-const log = @import("std").log.scoped(.framebuffer);
+const log = @import("std").log.scoped(.framecontext);
 
 const FRAMES = 2;
 
 const Self = @This();
 
-frames:[FRAMES]FrameData = .{FrameData{}} ** FRAMES,
+frames:[FRAMES]FrameContext = .{FrameContext{}} ** FRAMES,
 current:usize = 0,
 
-pub const FrameData = struct {
+pub const FrameContext = struct {
     swapchain_semaphore: c.VkSemaphore = null,
     render_semaphore: c.VkSemaphore = null,
     render_fence: c.VkFence = null,
@@ -44,7 +44,7 @@ pub fn init_frames(self: *Self, physical_device: PhysicalDevice, device: Device)
         check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
         check_vk_panic(c.vkCreateFence(device.handle, &fence_ci, vk_alloc_cbs, &frame.render_fence));
 
-        log.info("Created framebuffer data", .{});
+        log.info("Created framecontext", .{});
     }    
 }
 

@@ -1,5 +1,5 @@
 #import "@preview/lovelace:0.3.0": *
-#set text(font: "Source Serif 4")
+#set text(font: "Source Serif 4", size:10pt)
 #show math.equation : set text(font:"STIX Two Math")
 #show heading: h => { set text(font:"Source Serif 4",weight: "black"); h }
 
@@ -23,20 +23,33 @@ and put structs everywhere and member variables everywhere
 
 
 // TODO
-// = Algorithm
-// #align(center,
-// pseudocode-list(hooks: .5em, line-numbering: none)[
-//   + do something
-//   + do something else
-//   + *while* still something to do
-//     + do even more
-//     + *if* not done yet *then*
-//       + wait a bit
-//       + resume working
-//     + *else*
-//       + go home
-// ]
-// )
+= Algorithm
+  pass primitve control points to the GPU
+  eg. point along a curve fill, stroke
+  The CPU is responsible for calculating
+  the points from more high level geometry such as
+  circle arrow etc.
 
+  the GPU will generate meshes (using mesh shader)
+  to tesselate the geometry up to a certain resolution
+  to small triangles will be inneficent, too large triangles
+  will be inneficent for the rasterizer
 
+  the next step for the GPU is for the fragment shader
+  to fill in pixels for its triangle,
+  this can be done in one of three ways:
+  fill all,
+  fill inside a curve boundry
+  fill only the curve boundry with a certain thicknes
+  I think every possible geometry can be reduced to these
+  three if tesselation is done right.
+#v(1cm)
 
+#align(center,
+[#smallcaps("Fragmentshader")
+#pseudocode-list(hooks: .5em, line-numbering: none)[
+  + *if* pixel > boundry *then*
+    + discard
+  + *else*
+    + fill in pixel
+]])

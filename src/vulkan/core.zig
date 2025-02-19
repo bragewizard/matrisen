@@ -9,13 +9,15 @@ const PipelineBuilder = @import("pipelines/pipelinebuilder.zig");
 const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
-const Swapchain = @import("swapchain.zig").Swapchain;
-const Framebuffer = @import("framebuffer.zig");
+const Swapchain = @import("swapchain.zig");
+const FrameContext = @import("framecontext.zig");
+const init_mesh_pipeline = @import("pipelines/meshpipeline.zig").init_mesh_pipeline;
 const loop = @import("../applications/test.zig").loop;
 
 pub const vk_alloc_cbs: ?*c.VkAllocationCallbacks = null;
 const Self = @This();
 
+vkCmdDrawMeshTasksEXT : c.PFN_vkCmdDrawMeshTasksEXT = undefined,
 resize_request: bool = false,
 frame_number: u64 = 0,
 cpu_allocator: std.mem.Allocator = undefined,
@@ -25,7 +27,9 @@ physical_device: PhysicalDevice = undefined,
 device: Device = undefined,
 surface: c.VkSurfaceKHR = undefined,
 swapchain: Swapchain = undefined,
-framebuffer: Framebuffer = undefined,
+framecontext: FrameContext = undefined,
+pipelines: [1]c.VkPipeline = undefined,
+pipeline_layouts: [1]c.VkPipelineLayout = undefined,
 lua_state: ?*c.lua_State = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
@@ -65,20 +69,19 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     check_vk_panic(c.vmaCreateAllocator(&allocator_ci, &engine.gpu_allocator));
     defer c.vmaDestroyAllocator(engine.gpu_allocator);
 
-    engine.framebuffer.init_frames(engine.physical_device, engine.device);
-    defer engine.framebuffer.deinit(engine.device);
+    engine.framecontext.init_frames(engine.physical_device, engine.device);
+    defer engine.framecontext.deinit(engine.device);
 
-    // engine.init_descriptors();
-    // engine.init_pipelines();
-    // engine.init_default_data();
+    engine.init_mesh_pipeline();
+    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vk_alloc_cbs);
+    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipeline_layouts[0], vk_alloc_cbs);
 
-    // c.vkDestroyDescriptorSetLayout(self.device, self.draw_image_descriptor_layout, vk_alloc_cbs);
-    // c.vkDestroyDescriptorSetLayout(self.device, self.gpu_scene_data_descriptor_layout, vk_alloc_cbs);
-    // c.vkDestroyDescriptorSetLayout(self.device, self.single_image_descriptor_layout, vk_alloc_cbs);
-    // self.global_descriptor_allocator.deinit(self.device);
-    // for (&self.frames) |*frame| {
-    //     frame.frame_descriptors.deinit(self.device);
-    // }
+    const procAddr : c.PFN_vkCmdDrawMeshTasksEXT = @ptrCast(c.vkGetDeviceProcAddr(engine.device.handle, "vkCmdDrawMeshTasksEXT"));
+    if (procAddr == null) {
+        log.info("noo",.{});
+        @panic("");
+    }
+    engine.vkCmdDrawMeshTasksEXT = procAddr;
 
     defer check_vk(c.vkDeviceWaitIdle(engine.device.handle)) catch @panic("Failed to wait for device idle");
     init_allocator.deinit();

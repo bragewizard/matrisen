@@ -30,33 +30,11 @@ pub const MaterialPipeline = struct {
     layout : c.VkPipelineLayout  
 };
 
-pub const AllocatedBuffer = struct {
-    buffer: c.VkBuffer,
-    allocation: c.VmaAllocation,
-    info: c.VmaAllocationInfo,
-};
-
-pub const AllocatedImage = struct {
-    image: c.VkImage,
-    allocation: c.VmaAllocation,
-};
-
-pub const ImageAndView = struct {
-    image: c.VkImage,
-    view: c.VkImageView,
-};
-
-pub const AllocatedImageAndView = struct {
-    allocation: c.VmaAllocation,
-    image: c.VkImage,
-    view: c.VkImageView,
-};
-
-pub const GPUMeshBuffers = struct {
-    vertex_buffer: AllocatedBuffer,
-    index_buffer: AllocatedBuffer,
-    vertex_buffer_adress: c.VkDeviceAddress,
-};
+// pub const GPUMeshBuffers = struct {
+//     vertex_buffer: AllocatedBuffer,
+//     index_buffer: AllocatedBuffer,
+//     vertex_buffer_adress: c.VkDeviceAddress,
+// };
 
 pub const GPUDrawPushConstants = extern struct {
     model: m.Mat4,
@@ -80,15 +58,6 @@ pub const Vertex = extern struct {
     color: m.Vec4,
 };
 
-pub const FrameData = struct {
-    swapchain_semaphore: c.VkSemaphore = null,
-    render_semaphore: c.VkSemaphore = null,
-    render_fence: c.VkFence = null,
-    command_pool: c.VkCommandPool = null,
-    main_command_buffer: c.VkCommandBuffer = null,
-    frame_descriptors: DescriptorAllocatorGrowable = DescriptorAllocatorGrowable{},
-};
-
 pub const ComputePushConstants = extern struct {
     data1: m.Vec4,
     data2: m.Vec4,
@@ -101,11 +70,11 @@ pub const GeoSurface = struct {
     count: u32,
 };
 
-pub const MeshAsset = struct {
-    name: []const u8,
-    surfaces: std.ArrayList(GeoSurface),
-    mesh_buffers: GPUMeshBuffers = undefined,
-};
+// pub const MeshAsset = struct {
+//     name: []const u8,
+//     surfaces: std.ArrayList(GeoSurface),
+//     mesh_buffers: GPUMeshBuffers = undefined,
+// };
 
 pub const Index = usize;
 

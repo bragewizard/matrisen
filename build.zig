@@ -81,6 +81,10 @@ fn add_shader(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) voi
     const outpath = std.fmt.allocPrint(b.allocator, "src/shaders/{s}.spv", .{name}) catch @panic("OOM");
 
     const shader_compilation = b.addSystemCommand(&.{"glslangValidator"});
+    shader_compilation.addArg("--target-env");
+    shader_compilation.addArg("vulkan1.3");
+    shader_compilation.addArg("--target-env");
+    shader_compilation.addArg("spirv1.5");
     shader_compilation.addArg("-V");
     shader_compilation.addArg("-o");
     const output = shader_compilation.addOutputFileArg(outpath);
