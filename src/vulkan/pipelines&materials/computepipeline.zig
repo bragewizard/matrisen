@@ -1,3 +1,12 @@
+
+
+pub const ComputePushConstants = extern struct {
+    data1: m.Vec4,
+    data2: m.Vec4,
+    data3: m.Vec4,
+    data4: m.Vec4,
+};
+
 fn init_background_pipelines(self: *Self) void {
     var compute_layout = std.mem.zeroInit(c.VkPipelineLayoutCreateInfo, .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

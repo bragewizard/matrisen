@@ -1,9 +1,7 @@
 #import "@preview/lovelace:0.3.0": *
 #set text(font: "Source Serif 4", size:10pt)
-#show math.equation : set text(font:"STIX Two Math")
-#show heading: h => { set text(font:"Source Serif 4",weight: "black"); h }
-
-#set page(numbering: "1")
+#show math.equation : set text(font:"TeX Gyre Schola Math")
+#show heading: set text(font:"Source Serif 4",weight: "black")
 #set par(justify: true)
 
 #text("Matrisen", size: 24pt, weight: "black")
@@ -20,6 +18,9 @@ save the parameters after model view projection and lighting calculations
 
 make a global resource bank with buffers and images, dont bundle them together
 and put structs everywhere and member variables everywhere
+
+Use uniforms for global scene data and depending on material for texture and samplers
+use push constants in 
 
 
 // TODO

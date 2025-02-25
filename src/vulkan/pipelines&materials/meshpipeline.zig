@@ -42,7 +42,7 @@ pub fn init_mesh_pipeline(core: *Core) void {
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .polygonMode = c.VK_POLYGON_MODE_FILL,
         .cullMode = c.VK_CULL_MODE_NONE,
-        .frontFace = c.VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .frontFace = c.VK_FRONT_FACE_CLOCKWISE,
         .lineWidth = 1.0,
     };
 

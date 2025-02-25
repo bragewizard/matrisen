@@ -1,13 +1,14 @@
 const std = @import("std");
 const c = @import("../clibs.zig");
 const check_vk = @import("debug.zig").check_vk;
+const Core = @import("core.zig");
 
-pub const DescriptorLayoutBuilder = struct {
+pub const LayoutBuilder = struct {
     bindings: std.ArrayList(c.VkDescriptorSetLayoutBinding) = undefined,
     const Self = @This();
 
-    pub fn init(self: *Self, alloc: std.mem.Allocator) void {
-        self.bindings = std.ArrayList(c.VkDescriptorSetLayoutBinding).init(alloc);
+    pub fn init(alloc: std.mem.Allocator) Self {
+        return .{ .bindings = .init(alloc) };
     }
 
     pub fn deinit(self: *Self) void {
@@ -15,11 +16,11 @@ pub const DescriptorLayoutBuilder = struct {
     }
 
     pub fn add_binding(self: *Self, binding: u32, descriptor_type: c.VkDescriptorType) void {
-        const new_binding = std.mem.zeroInit(c.VkDescriptorSetLayoutBinding, .{
+        const new_binding : c.VkDescriptorSetLayoutBinding =.{
             .binding = binding,
             .descriptorType = descriptor_type,
             .descriptorCount = 1,
-        });
+        };
         self.bindings.append(new_binding) catch @panic("Failed to append to bindings");
     }
 
@@ -45,59 +46,7 @@ pub const DescriptorLayoutBuilder = struct {
     }
 };
 
-pub const DescriptorAllocator = struct {
-    pub const PoolSizeRatio = struct {
-        ratio: f32,
-        type: c.VkDescriptorType,
-    };
-
-    pool: c.VkDescriptorPool = undefined,
-
-    pub fn init_pool(self: *DescriptorAllocator, device: c.VkDevice, max_sets: u32, pool_ratios: []PoolSizeRatio, alloc: std.mem.Allocator) void {
-        var pool_sizes = std.ArrayList(c.VkDescriptorPoolSize).init(alloc);
-        defer pool_sizes.deinit();
-        for (pool_ratios) |ratio| {
-            const size = c.VkDescriptorPoolSize{
-                .type = ratio.type,
-                .descriptorCount = max_sets * @as(u32, @intFromFloat(ratio.ratio)),
-            };
-            pool_sizes.append(size) catch @panic("Failed to append to pool_sizes");
-        }
-
-        const info = c.VkDescriptorPoolCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .flags = 0,
-            .maxSets = max_sets,
-            .poolSizeCount = @as(u32, @intCast(pool_sizes.items.len)),
-            .pPoolSizes = pool_sizes.items.ptr,
-        };
-
-        check_vk(c.vkCreateDescriptorPool(device, &info, null, &self.pool)) catch @panic("Failed to create descriptor pool");
-    }
-
-    pub fn clear_descriptors(self: *DescriptorAllocator, device: c.VkDevice) void {
-        _ = c.vkResetDescriptorPool(device, self.pool, 0);
-    }
-
-    pub fn destroy_pool(self: *DescriptorAllocator, device: c.VkDevice) void {
-        _ = c.vkDestroyDescriptorPool(device, self.pool, null);
-    }
-
-    pub fn allocate(self: *DescriptorAllocator, device: c.VkDevice, layout: c.VkDescriptorSetLayout) c.VkDescriptorSet {
-        const info = c.VkDescriptorSetAllocateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext = null,
-            .descriptorPool = self.pool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &layout,
-        };
-        var descriptor_set: c.VkDescriptorSet = undefined;
-        check_vk(c.vkAllocateDescriptorSets(device, &info, &descriptor_set)) catch @panic("Failed to allocate descriptor set");
-        return descriptor_set;
-    }
-};
-
-pub const DescriptorAllocatorGrowable = struct {
+pub const Allocator = struct {
     pub const PoolSizeRatio = struct {
         ratio: f32,
         type: c.VkDescriptorType,
@@ -210,7 +159,7 @@ pub const DescriptorAllocatorGrowable = struct {
     }
 };
 
-pub const DescriptorWriter = struct {
+pub const Writer = struct {
     writes: std.ArrayList(c.VkWriteDescriptorSet) = undefined,
     buffer_infos: std.ArrayList(c.VkDescriptorBufferInfo) = undefined,
     image_infos: std.ArrayList(c.VkDescriptorImageInfo) = undefined,
@@ -233,7 +182,7 @@ pub const DescriptorWriter = struct {
         const info_container = struct {
             var info: c.VkDescriptorBufferInfo = c.VkDescriptorBufferInfo{};
         };
-        info_container.info = c.VkDescriptorBufferInfo{ .buffer = buffer, .offset = offset, .range = size};
+        info_container.info = c.VkDescriptorBufferInfo{ .buffer = buffer, .offset = offset, .range = size };
         self.buffer_infos.append(info_container.info) catch @panic("failed to append");
         const write = c.VkWriteDescriptorSet{ .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = binding, .dstSet = null, .descriptorCount = 1, .descriptorType = ty, .pBufferInfo = &info_container.info };
         self.writes.append(write) catch @panic("failed to append");
@@ -243,7 +192,7 @@ pub const DescriptorWriter = struct {
         const info_container = struct {
             var info: c.VkDescriptorImageInfo = c.VkDescriptorImageInfo{};
         };
-        info_container.info = c.VkDescriptorImageInfo{ .sampler = sampler, .imageView = image, .imageLayout = layout};
+        info_container.info = c.VkDescriptorImageInfo{ .sampler = sampler, .imageView = image, .imageLayout = layout };
 
         self.image_infos.append(info_container.info) catch @panic("append failed");
         const write = c.VkWriteDescriptorSet{ .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = binding, .dstSet = null, .descriptorCount = 1, .descriptorType = ty, .pImageInfo = &info_container.info };
@@ -264,47 +213,96 @@ pub const DescriptorWriter = struct {
     }
 };
 
-fn init_descriptors(self: *Self) void {
-    var sizes = [_]d.DescriptorAllocatorGrowable.PoolSizeRatio{
+fn init_descriptors(core: *Core) void {
+    var sizes = [_]Allocator.PoolSizeRatio{
         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
     };
 
-    self.global_descriptor_allocator.init(self.device, 10, &sizes, self.cpu_allocator);
+    core.global_descriptor_allocator.init(core.device, 10, &sizes, core.cpu_allocator);
 
     {
-        var builder = d.DescriptorLayoutBuilder{};
-        builder.init(self.cpu_allocator);
+        var builder : LayoutBuilder = .init(core.cpu_allocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        self.draw_image_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
+        core.descriptorlayouts[0] = builder.build(core.device, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
     }
     {
-        var builder = d.DescriptorLayoutBuilder{};
-        builder.init(self.cpu_allocator);
+        var builder : LayoutBuilder = .init(core.cpu_allocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        self.gpu_scene_data_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+        core.descriptorlayouts[1] = builder.build(core.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
     }
     {
-        var builder = d.DescriptorLayoutBuilder{};
-        builder.init(self.cpu_allocator);
+        var builder : LayoutBuilder = .init(core.cpu_allocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        self.single_image_descriptor_layout = builder.build(self.device, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+        core.descriptorlayouts[2] = builder.build(core.device, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
     }
 
-    self.draw_image_descriptors = self.global_descriptor_allocator.allocate(self.device, self.draw_image_descriptor_layout, null);
+    core.draw_image_descriptors = core.global_descriptor_allocator.allocate(core.device, core.draw_image_descriptor_layout, null);
 
-    var writer = d.DescriptorWriter.init(self.cpu_allocator);
+    var writer : Writer = .init(core.cpu_allocator);
     defer writer.deinit();
-    writer.write_image(0, self.draw_image.view, null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    writer.update_set(self.device, self.draw_image_descriptors);
+    writer.write_image(0, core.draw_image.view, null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    writer.update_set(core.device, core.draw_image_descriptors);
 
-    for (&self.frames) |*frame| {
-        var ratios = [_]d.DescriptorAllocatorGrowable.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
-        frame.frame_descriptors.init(self.device, 1000, &ratios, self.cpu_allocator);
-        frame.buffer_deletion_queue.init(self.cpu_allocator);
+    for (&core.frames) |*frame| {
+        var ratios = [_]Allocator.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
+        frame.frame_descriptors.init(core.device, 1000, &ratios,core.cpu_allocator);
+        frame.buffer_deletion_queue.init(core.cpu_allocator);
     }
     log.info("Initialized descriptors", .{});
 }
+
+// pub const DescriptorAllocator = struct {
+//     pub const PoolSizeRatio = struct {
+//         ratio: f32,
+//         type: c.VkDescriptorType,
+//     };
+
+//     pool: c.VkDescriptorPool = undefined,
+
+//     pub fn init_pool(self: *DescriptorAllocator, device: c.VkDevice, max_sets: u32, pool_ratios: []PoolSizeRatio, alloc: std.mem.Allocator) void {
+//         var pool_sizes = std.ArrayList(c.VkDescriptorPoolSize).init(alloc);
+//         defer pool_sizes.deinit();
+//         for (pool_ratios) |ratio| {
+//             const size = c.VkDescriptorPoolSize{
+//                 .type = ratio.type,
+//                 .descriptorCount = max_sets * @as(u32, @intFromFloat(ratio.ratio)),
+//             };
+//             pool_sizes.append(size) catch @panic("Failed to append to pool_sizes");
+//         }
+
+//         const info = c.VkDescriptorPoolCreateInfo{
+//             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+//             .flags = 0,
+//             .maxSets = max_sets,
+//             .poolSizeCount = @as(u32, @intCast(pool_sizes.items.len)),
+//             .pPoolSizes = pool_sizes.items.ptr,
+//         };
+
+//         check_vk(c.vkCreateDescriptorPool(device, &info, null, &self.pool)) catch @panic("Failed to create descriptor pool");
+//     }
+
+//     pub fn clear_descriptors(self: *DescriptorAllocator, device: c.VkDevice) void {
+//         _ = c.vkResetDescriptorPool(device, self.pool, 0);
+//     }
+
+//     pub fn destroy_pool(self: *DescriptorAllocator, device: c.VkDevice) void {
+//         _ = c.vkDestroyDescriptorPool(device, self.pool, null);
+//     }
+
+//     pub fn allocate(self: *DescriptorAllocator, device: c.VkDevice, layout: c.VkDescriptorSetLayout) c.VkDescriptorSet {
+//         const info = c.VkDescriptorSetAllocateInfo{
+//             .sType = c.VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+//             .pNext = null,
+//             .descriptorPool = self.pool,
+//             .descriptorSetCount = 1,
+//             .pSetLayouts = &layout,
+//         };
+//         var descriptor_set: c.VkDescriptorSet = undefined;
+//         check_vk(c.vkAllocateDescriptorSets(device, &info, &descriptor_set)) catch @panic("Failed to allocate descriptor set");
+//         return descriptor_set;
+//     }
+// };

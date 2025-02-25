@@ -1,21 +1,50 @@
-fn create_buffer(self: *Self, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage) t.AllocatedBuffer {
-    const buffer_info = std.mem.zeroInit(c.VkBufferCreateInfo, .{
+const c = @import("../clibs.zig");
+const m = @import("../3Dmath.zig");
+const debug = @import("debug.zig");
+const Self = @This();
+
+pub const SceneDataUniform = extern struct {
+    view: m.Mat4,
+    proj: m.Mat4,
+    viewproj: m.Mat4,
+    ambient_color: m.Vec4,
+    sunlight_dir: m.Vec4,
+    sunlight_color: m.Vec4,
+};
+
+pub const AllocatedBuffer = struct {
+    buffer:c.VkBuffer,
+    allocation: c.VmaAllocation,
+    info: c.VmaAllocationInfo
+};
+
+pub const Vertex = struct {
+    pos : m.Vec3,
+    uv_x : f32,
+    normal : m.Vec3,
+    uv_y : f32,
+    color: m.Vec4,
+};
+
+
+fn create_buffer(self: *Self, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage) AllocatedBuffer {
+    const buffer_info : c.VkBufferCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = alloc_size,
         .usage = usage,
-    });
+    };
 
-    const vma_alloc_info = std.mem.zeroInit(c.VmaAllocationCreateInfo, .{
+    const vma_alloc_info : c.VmaAllocationCreateInfo = .{
         .usage = memory_usage,
         .flags = c.VMA_ALLOCATION_CREATE_MAPPED_BIT,
-    });
+    };
 
-    var new_buffer: t.AllocatedBuffer = undefined;
-    check_vk(c.vmaCreateBuffer(self.gpu_allocator, &buffer_info, &vma_alloc_info, &new_buffer.buffer, &new_buffer.allocation, &new_buffer.info)) catch @panic("Failed to create buffer");
+    var new_buffer: AllocatedBuffer = undefined;
+    debug.check_vk(c.vmaCreateBuffer(self.gpu_allocator, &buffer_info, &vma_alloc_info, &new_buffer.buffer, &new_buffer.allocation, &new_buffer.info)) catch @panic("Failed to create buffer");
     return new_buffer;
 }
 
-pub fn upload_mesh(self: *Self, indices: []u32, vertices: []t.Vertex) t.GPUMeshBuffers {
+pub fn upload_mesh(self: *Self, indices: []u32, vertices: []Vertex) AllocatedBuffer {
     const index_buffer_size = @sizeOf(u32) * indices.len;
     const vertex_buffer_size = @sizeOf(t.Vertex) * vertices.len;
 

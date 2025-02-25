@@ -3,17 +3,23 @@
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout(triangles) out;
-layout(max_vertices = 3, max_primitives = 1) out;
+layout(max_vertices = 6, max_primitives = 2) out;
 
 void main() {
     // Set meshlet properties
-    SetMeshOutputsEXT(3, 1);
+    SetMeshOutputsEXT(6, 2); // 6 vertices and 2 primitives (triangles)
 
-    // Define the vertices of the triangle
-    gl_MeshVerticesEXT[0].gl_Position = vec4(-0.5, -0.5, 0.0, 1.0);
-    gl_MeshVerticesEXT[1].gl_Position = vec4(0.5, -0.5, 0.0, 1.0);
-    gl_MeshVerticesEXT[2].gl_Position = vec4(0.0, 0.5, 0.0, 1.0);
+    // Define the vertices of the first triangle
+    gl_MeshVerticesEXT[0].gl_Position = vec4(-0.5, -0.5, 0.0, 1.0); // Bottom-left
+    gl_MeshVerticesEXT[1].gl_Position = vec4(0.5, -0.5, 0.0, 1.0);  // Bottom-right
+    gl_MeshVerticesEXT[2].gl_Position = vec4(0.0, 0.5, 0.0, 1.0);   // Top-center
 
-    // Define the primitive (triangle) using the vertices
-    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+    // Define the vertices of the second triangle
+    gl_MeshVerticesEXT[3].gl_Position = vec4(-0.8, 0.8, 0.0, 1.0);  // Top-left
+    gl_MeshVerticesEXT[4].gl_Position = vec4(0.5, 0.5, 0.0, 1.0);   // Top-right
+    gl_MeshVerticesEXT[5].gl_Position = vec4(0.0, -0.8, 0.0, 1.0);  // Bottom-center
+
+    // Define the primitives (two triangles)
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2); // First triangle
+    gl_PrimitiveTriangleIndicesEXT[1] = uvec3(3, 4, 5); // Second triangle
 }
