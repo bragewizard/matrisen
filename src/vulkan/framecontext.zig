@@ -4,6 +4,7 @@ const check_vk_panic = @import("debug.zig").check_vk_panic;
 const check_vk = @import("debug.zig").check_vk;
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
+const descriptors = @import("descriptors.zig");
 const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
 const c = @import("../clibs.zig");
 const log = @import("std").log.scoped(.framecontext);
@@ -21,7 +22,7 @@ pub const FrameContext = struct {
     render_fence: c.VkFence = null,
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
-    // frame_descriptors: DescriptorAllocatorGrowable = DescriptorAllocatorGrowable{},
+    // frame_descriptors : descriptors.Allocator = .{},
 };
 
 

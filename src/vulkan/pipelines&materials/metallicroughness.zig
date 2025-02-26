@@ -1,31 +1,31 @@
 const c = @import("../../clibs.zig");
 const m = @import("../../3Dmath.zig");
 
-const MaterialConstantsUniform = extern struct {
+
+const MaterialConstantsUniform = struct {
     colorfactors: m.Vec4,
     metalrough_factors: m.Vec4,
     padding: [14]m.Vec4,
 };
 
 const MaterialResources = struct {
-    colorimage: AllocatedImage = undefined,
+    colorimage: AllocatedImageAndView = undefined,
     colorsampler: c.VkSampler = undefined,
-    metalroughimage: AllocatedImage = undefined,
+    metalroughimage: AllocatedImageAndView = undefined,
     metalroughsampler: c.VkSampler = undefined,
     databuffer: c.VkBuffer = undefined,
     databuffer_offset: u32 = undefined,
 };
 
-const MaterialPass = enum {
-    Transparent,
-    Opaque,
-};
 
+opaque_pipeline: MaterialPipeline = undefined,
+transparent_pipeline: MaterialPipeline = undefined,
 materiallayout: c.VkDescriptorSetLayout = undefined,
-writer: Descriptor.Writer,
+writer: descriptors.Writer,
+
 
 pub fn init(alloc: std.mem.Allocator) @This() {
-    return .{ .writer = .init(alloc) };
+    return .{ .writer = d.DescriptorWriter.init(alloc) };
 }
 
 pub fn build_pipelines(self: *@This(), engine: *Self) void {
@@ -40,7 +40,7 @@ pub fn build_pipelines(self: *@This(), engine: *Self) void {
     defer c.vkDestroyShaderModule(engine.device, vertex_module, vk_alloc_cbs);
     defer c.vkDestroyShaderModule(engine.device, fragment_module, vk_alloc_cbs);
 
-    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT };
+    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(t.GPUDrawPushConstants), .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT };
 
     var layout_builder = d.DescriptorLayoutBuilder{};
     layout_builder.init(engine.cpu_allocator);
@@ -90,21 +90,32 @@ pub fn build_pipelines(self: *@This(), engine: *Self) void {
     pipelineBuilder.enable_depthtest(false, c.VK_COMPARE_OP_GREATER_OR_EQUAL);
 
     self.transparent_pipeline.pipeline = pipelineBuilder.build_pipeline(engine.device);
+    std.debug.print("init_pipelines {*}\n", .{&self.opaque_pipeline});
+}
+
+fn clear_resources(self: *@This(), device: c.VkDevice) void {
+    c.vkDestroyDescriptorSetLayout(device, self.materiallayout, null);
+    c.vkDestroyPipelineLayout(device, self.transparent_pipeline.layout, null);
+    c.vkDestroyPipeline(device, self.transparent_pipeline.pipeline, null);
+    c.vkDestroyPipeline(device, self.opaque_pipeline.pipeline, null);
+    self.writer.deinit();
 }
 
 fn write_material(self: *@This(), device: c.VkDevice, pass: t.MaterialPass, resources: MaterialResources, descriptor_allocator: *d.DescriptorAllocatorGrowable) t.MaterialInstance {
-    var matdata = t.MaterialInstance{};
+    var matdata = MaterialInstance{};
     matdata.passtype = pass;
     if (pass == .Transparent) {
         matdata.pipeline = &self.transparent_pipeline;
     } else {
         matdata.pipeline = &self.opaque_pipeline;
+        std.debug.print("init_pipelines {*}\n", .{&self.opaque_pipeline});
     }
 
+    std.debug.print("init_pipelines {*}\n", .{&self.opaque_pipeline});
     matdata.materialset = descriptor_allocator.allocate(device, self.materiallayout, null);
 
     self.writer.clear();
-    self.writer.write_buffer(0, resources.databuffer, @sizeOf(MaterialConstantsUniform), resources.databuffer_offset, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    self.writer.write_buffer(0, resources.databuffer, @sizeOf(MaterialConstants), resources.databuffer_offset, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     self.writer.write_image(1, resources.colorimage.view, resources.colorsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     self.writer.write_image(2, resources.metalroughimage.view, resources.metalroughsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 

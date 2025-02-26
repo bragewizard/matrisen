@@ -2,6 +2,22 @@ const c = @import("../clibs.zig");
 const check_vk = @import("debug.zig").check_vk;
 const std = @import("std");
 
+pub const AllocatedImage = struct {
+    image: c.VkImage,
+    allocation: c.VmaAllocation,
+};
+
+pub const ImageAndView = struct {
+    image: c.VkImage,
+    view: c.VkImageView,
+};
+
+pub const AllocatedImageAndView = struct {
+    allocation: c.VmaAllocation,
+    image: c.VkImage,
+    view: c.VkImageView,
+};
+
 // fn standard_image(comptime name: []const u8, comptime usage: c.VkImageUsageFlags) c.VkImageCreateInfo {
 //     name = c.VkImageCreateInfo {
 //         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
