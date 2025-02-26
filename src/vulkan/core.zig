@@ -5,13 +5,13 @@ const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const c = @import("../clibs.zig");
 const Window = @import("../window.zig");
-const PipelineBuilder = @import("pipelines/pipelinebuilder.zig");
+const PipelineBuilder = @import("pipelines&materials/pipelinebuilder.zig");
 const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
 const Swapchain = @import("swapchain.zig");
 const FrameContext = @import("framecontext.zig");
-const init_mesh_pipeline = @import("pipelines/meshpipeline.zig").init_mesh_pipeline;
+const init_mesh_pipeline = @import("pipelines&materials/meshpipeline.zig").init_mesh_pipeline;
 const loop = @import("../applications/test.zig").loop;
 
 pub const vk_alloc_cbs: ?*c.VkAllocationCallbacks = null;
@@ -30,6 +30,7 @@ swapchain: Swapchain = undefined,
 framecontext: FrameContext = undefined,
 pipelines: [1]c.VkPipeline = undefined,
 pipeline_layouts: [1]c.VkPipelineLayout = undefined,
+descriptorset_layouts: [1]c.VkDescriptorSetLayout = undefined,
 lua_state: ?*c.lua_State = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
@@ -76,6 +77,8 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vk_alloc_cbs);
     defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipeline_layouts[0], vk_alloc_cbs);
 
+
+    // TODO fix this ugly ahh pointer thing
     const procAddr : c.PFN_vkCmdDrawMeshTasksEXT = @ptrCast(c.vkGetDeviceProcAddr(engine.device.handle, "vkCmdDrawMeshTasksEXT"));
     if (procAddr == null) {
         log.info("noo",.{});

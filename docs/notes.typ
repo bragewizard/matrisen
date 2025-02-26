@@ -1,56 +1,45 @@
 #import "@preview/lovelace:0.3.0": *
 #set text(font: "Source Serif 4", size:10pt)
 #show math.equation : set text(font:"TeX Gyre Schola Math")
-#show heading: set text(font:"Source Serif 4",weight: "black")
+#show heading: set text(font:"Source Serif 4",weight: "black",style: "italic")
 #set par(justify: true)
 
-#text("Matrisen", size: 24pt, weight: "black")
+#text("Matrisen", size: 24pt, weight: "black",style: "italic")
 
 #datetime.today().display()
 #v(1cm)
 
 
-= Notes
+= Architechtural Elements
 #v(1em)
 
-set up mesh shader that takes in parameters for curves and lines
-save the parameters after model view projection and lighting calculations
+Use Device Buffer Adress for large buffers (vertex data, parameters, images),
+uniforms for global scene data (time, camera, lights) and depending on material use
+uniforms for texture and samplers.
+Use push constants for per object data (attenuation, device buffer index)
 
-make a global resource bank with buffers and images, dont bundle them together
-and put structs everywhere and member variables everywhere
+= Rendering primitives (lines, curves, circles, arcs, polygons) and their 3D variants
+#v(1em)
 
-Use uniforms for global scene data and depending on material for texture and samplers
-use push constants in 
+The plan here is to have a single pipeline for all these primitives.
+This will mean that the fragment shader has some branching.
+Font rendering will be covered by this since they count as curves. To
+make it more performant we combine tesselation with this so that we have a
+nice size of triangles---not to small and not too big. With too large
+triangles we waste alot in the fragment shader, with too small we will
+be vertex limited.
+Tesselation should ideally be done in the mesh shader.
+We could also support texture in this pipeline but idk.
 
+= Rendering traditional meshes
+#v(1em)
 
-// TODO
-= Algorithm
-  pass primitve control points to the GPU
-  eg. point along a curve fill, stroke
-  The CPU is responsible for calculating
-  the points from more high level geometry such as
-  circle arrow etc.
-
-  the GPU will generate meshes (using mesh shader)
-  to tesselate the geometry up to a certain resolution
-  to small triangles will be inneficent, too large triangles
-  will be inneficent for the rasterizer
-
-  the next step for the GPU is for the fragment shader
-  to fill in pixels for its triangle,
-  this can be done in one of three ways:
-  fill all,
-  fill inside a curve boundry
-  fill only the curve boundry with a certain thicknes
-  I think every possible geometry can be reduced to these
-  three if tesselation is done right.
-#v(1cm)
-
-#align(center,
-[#smallcaps("Fragmentshader")
-#pseudocode-list(hooks: .5em, line-numbering: none)[
-  + *if* pixel > boundry *then*
-    + discard
-  + *else*
-    + fill in pixel
-]])
+Use a PBR material with its own pipeline or two
+// #align(center,
+// [#smallcaps("Fragmentshader")
+// #pseudocode-list(hooks: .5em, line-numbering: none)[
+//   + *if* pixel > boundry *then*
+//     + discard
+//   + *else*
+//     + fill in pixel
+// ]])
