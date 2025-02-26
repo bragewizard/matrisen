@@ -22,7 +22,7 @@ pub const FrameContext = struct {
     render_fence: c.VkFence = null,
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
-    // frame_descriptors : descriptors.Allocator = .{},
+    frame_descriptors : descriptors.Allocator = .{},
 };
 
 

@@ -11,6 +11,8 @@ const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
 const Swapchain = @import("swapchain.zig");
 const FrameContext = @import("framecontext.zig");
+const OffFrameContext = @import("off-framecontext.zig");
+const descriptors = @import("descriptors.zig");
 const init_mesh_pipeline = @import("pipelines&materials/meshpipeline.zig").init_mesh_pipeline;
 const loop = @import("../applications/test.zig").loop;
 
@@ -28,9 +30,12 @@ device: Device = undefined,
 surface: c.VkSurfaceKHR = undefined,
 swapchain: Swapchain = undefined,
 framecontext: FrameContext = undefined,
+off_framecontext : OffFrameContext = .{},
 pipelines: [1]c.VkPipeline = undefined,
 pipeline_layouts: [1]c.VkPipelineLayout = undefined,
 descriptorset_layouts: [1]c.VkDescriptorSetLayout = undefined,
+descriptorsets: [1]c.VkDescriptorSet = undefined,
+global_descriptor_allocator: descriptors.Allocator = undefined,
 lua_state: ?*c.lua_State = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
@@ -73,9 +78,14 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     engine.framecontext.init_frames(engine.physical_device, engine.device);
     defer engine.framecontext.deinit(engine.device);
 
+    engine.off_framecontext.init(&engine);
+    defer engine.off_framecontext.deinit(engine.device);
+
     engine.init_mesh_pipeline();
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vk_alloc_cbs);
     defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipeline_layouts[0], vk_alloc_cbs);
+
+    // descriptors.init_descriptors(&engine);
 
 
     // TODO fix this ugly ahh pointer thing
