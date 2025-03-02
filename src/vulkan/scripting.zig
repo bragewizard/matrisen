@@ -24,7 +24,7 @@ pub fn set_push_constant(l: ?*c.lua_State) callconv(.C) c_int {
 
 pub fn register_lua_functions(self: *engine) void {
     const lua_fn: c.lua_CFunction = &set_push_constant;
-    c.lua_pushlightuserdata(self.lua_state, self);
-    c.lua_pushcclosure(self.lua_state, lua_fn, 1);
-    c.lua_setglobal(self.lua_state, "set_push_constant");
+    c.lua_pushlightuserdata(self.luastate, self);
+    c.lua_pushcclosure(self.luastate, lua_fn, 1);
+    c.lua_setglobal(self.luastate, "set_push_constant");
 }

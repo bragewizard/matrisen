@@ -21,8 +21,7 @@ pub fn draw(core: *Core) void {
     var swapchain_image_index: u32 = undefined;
     var e = c.vkAcquireNextImageKHR(core.device.handle, core.swapchain.handle, timeout, frame.swapchain_semaphore, null, &swapchain_image_index);
     if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
-        // log.warn("out of date", .{});
-        core.resize_request = true;
+        core.resizerequest = true;
         return;
     }
     check_vk(c.vkResetFences(core.device.handle, 1, &frame.render_fence)) catch @panic("Failed to reset render fence");
@@ -131,7 +130,7 @@ pub fn draw(core: *Core) void {
         .pImageIndices = &swapchain_image_index,
     };
     e = c.vkQueuePresentKHR(core.device.graphics_queue, &present_info);
-    core.frame_number +%= 1;
+    core.framenumber +%= 1;
     core.framecontext.switch_frame();
 }
 

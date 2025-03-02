@@ -2,7 +2,7 @@ const c = @import("../clibs.zig");
 const Core = @import("core.zig");
 const debug = @import("debug.zig");
 const Device = @import("device.zig").Device;
-const log = @import("std").log.scoped(.off_framecontext);
+const log = @import("std").log.scoped(.offframecontext);
 
 const Self = @This();
 
@@ -15,17 +15,17 @@ pub fn init(self : *Self, core : *Core) void {
     const command_pool_ci : c.VkCommandPoolCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = core.physical_device.graphics_queue_family,
+        .queueFamilyIndex = core.physicaldevice.graphics_queue_family,
     };
     
     const upload_fence_ci : c.VkFenceCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
     };
 
-    debug.check_vk(c.vkCreateFence(core.device.handle, &upload_fence_ci, Core.vk_alloc_cbs, &self.fence)) catch @panic("Failed to create upload fence");
+    debug.check_vk(c.vkCreateFence(core.device.handle, &upload_fence_ci, Core.vkallocationcallbacks, &self.fence)) catch @panic("Failed to create upload fence");
     log.info("Created sync structures", .{});
 
-    debug.check_vk(c.vkCreateCommandPool(core.device.handle, &command_pool_ci, Core.vk_alloc_cbs, &self.command_pool)) catch @panic("Failed to create upload command pool");
+    debug.check_vk(c.vkCreateCommandPool(core.device.handle, &command_pool_ci, Core.vkallocationcallbacks, &self.command_pool)) catch @panic("Failed to create upload command pool");
 
     const upload_command_buffer_ai : c.VkCommandBufferAllocateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -37,8 +37,8 @@ pub fn init(self : *Self, core : *Core) void {
 }
 
 pub fn deinit(self: *Self, device: Device) void {
-    c.vkDestroyCommandPool(device.handle, self.command_pool , Core.vk_alloc_cbs);
-    c.vkDestroyFence(device.handle, self.fence, Core.vk_alloc_cbs);
+    c.vkDestroyCommandPool(device.handle, self.command_pool , Core.vkallocationcallbacks);
+    c.vkDestroyFence(device.handle, self.fence, Core.vkallocationcallbacks);
 }
 
 pub fn submit(self: *@This(), submit_ctx: anytype) void {

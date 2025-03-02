@@ -1,8 +1,8 @@
 const Core = @import("../core.zig");
 const create_shader_module = @import("pipelinebuilder.zig").create_shader_module;
-const check_vk = @import("../debug.zig").check_vk;
+const debug = @import("../debug.zig");
 const PipelineBuilder = @import("pipelinebuilder.zig");
-const vk_alloc_cbs = @import("../core.zig").vk_alloc_cbs;
+const vk_alloc_cbs = @import("../core.zig").vkallocationcallbacks;
 const std = @import("std");
 const log = std.log.scoped(.meshshader);
 const c = @import("../../clibs.zig");
@@ -57,7 +57,7 @@ pub fn init_mesh_pipeline(core: *Core) void {
     };
 
     var mesh_pipeline_layout: c.VkPipelineLayout = undefined;
-    check_vk(c.vkCreatePipelineLayout(core.device.handle, &pipeline_layout_info, null, &mesh_pipeline_layout)) catch @panic("Failed to create pipeline layout");
+    debug.check_vk(c.vkCreatePipelineLayout(core.device.handle, &pipeline_layout_info, null, &mesh_pipeline_layout)) catch @panic("Failed to create pipeline layout");
 
     const multisample: c.VkPipelineMultisampleStateCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -111,9 +111,9 @@ pub fn init_mesh_pipeline(core: *Core) void {
     pipeline_info.pDynamicState = &dynamic_state_info;
 
     var pipeline: c.VkPipeline = undefined;
-    check_vk(c.vkCreateGraphicsPipelines(core.device.handle, null, 1, &pipeline_info, null, &pipeline)) catch @panic("failed to create meshpipeline");
+    debug.check_vk(c.vkCreateGraphicsPipelines(core.device.handle, null, 1, &pipeline_info, null, &pipeline)) catch @panic("failed to create meshpipeline");
     c.vkDestroyShaderModule(core.device.handle, mesh_module, vk_alloc_cbs);
     c.vkDestroyShaderModule(core.device.handle, fragment_module, vk_alloc_cbs);
     core.pipelines[0] = pipeline;
-    core.pipeline_layouts[0] = mesh_pipeline_layout;
+    core.pipelinelayouts[0] = mesh_pipeline_layout;
 }

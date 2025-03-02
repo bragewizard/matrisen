@@ -1,6 +1,6 @@
 const c = @import("clibs.zig");
 const std = @import("std");
-const vk_alloc_cbs = @import("vulkan/core.zig").vk_alloc_cbs;
+const vkallocationcallbacks = @import("vulkan/core.zig").vkallocationcallbacks;
 
 const Self = @This();
 
@@ -21,7 +21,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn create_surface(self: *Self, instance: c.VkInstance, surface: *c.VkSurfaceKHR) void {
-    check_sdl_bool(c.SDL_Vulkan_CreateSurface(self.sdl_window, instance, vk_alloc_cbs, surface));
+    check_sdl_bool(c.SDL_Vulkan_CreateSurface(self.sdl_window, instance, vkallocationcallbacks, surface));
 }
 
 pub fn resize(self: *Self) void {

@@ -1,11 +1,10 @@
 const graphics_cmd_pool_info = @import("commands.zig").graphics_cmd_pool_info;
 const graphics_cmdbuffer_info = @import("commands.zig").graphics_cmdbuffer_info;
-const check_vk_panic = @import("debug.zig").check_vk_panic;
-const check_vk = @import("debug.zig").check_vk;
+const debug = @import("debug.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
 const descriptors = @import("descriptors.zig");
-const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
+const vk_alloc_cbs = @import("core.zig").vkallocationcallbacks;
 const c = @import("../clibs.zig");
 const log = @import("std").log.scoped(.framecontext);
 
@@ -38,12 +37,12 @@ pub fn init_frames(self: *Self, physical_device: PhysicalDevice, device: Device)
 
     for (&self.frames) |*frame| {
         const command_pool_info = graphics_cmd_pool_info(physical_device);
-        check_vk_panic(c.vkCreateCommandPool(device.handle, &command_pool_info, vk_alloc_cbs, &frame.command_pool));
+        debug.check_vk_panic(c.vkCreateCommandPool(device.handle, &command_pool_info, vk_alloc_cbs, &frame.command_pool));
         const command_buffer_info = graphics_cmdbuffer_info(frame.command_pool);
-        check_vk_panic(c.vkAllocateCommandBuffers(device.handle, &command_buffer_info, &frame.command_buffer));
-        check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
-        check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
-        check_vk_panic(c.vkCreateFence(device.handle, &fence_ci, vk_alloc_cbs, &frame.render_fence));
+        debug.check_vk_panic(c.vkAllocateCommandBuffers(device.handle, &command_buffer_info, &frame.command_buffer));
+        debug.check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
+        debug.check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
+        debug.check_vk_panic(c.vkCreateFence(device.handle, &fence_ci, vk_alloc_cbs, &frame.render_fence));
 
         log.info("Created framecontext", .{});
     }    

@@ -1,9 +1,8 @@
 const c = @import("../clibs.zig");
 const std = @import("std");
-const check_vk = @import("debug.zig").check_vk;
-const check_vk_panic = @import("debug.zig").check_vk_panic;
+const debug = @import("debug.zig");
 const Core = @import("core.zig");
-const alloc_cb = @import("core.zig").vk_alloc_cbs;
+const alloc_cb = @import("core.zig").vkallocationcallbacks;
 const log = std.log.scoped(.swapchain);
 
 pub const SupportInfo = struct {
@@ -13,17 +12,17 @@ pub const SupportInfo = struct {
 
     pub fn init(a: std.mem.Allocator, device: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) SupportInfo {
         var capabilities: c.VkSurfaceCapabilitiesKHR = undefined;
-        check_vk_panic(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities));
+        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities));
 
         var format_count: u32 = undefined;
-        check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, null));
+        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, null));
         const formats = a.alloc(c.VkSurfaceFormatKHR, format_count) catch { log.err("failed to alloc", .{}); @panic(""); };
-        check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, formats.ptr));
+        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, formats.ptr));
 
         var present_mode_count: u32 = undefined;
-        check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, null));
+        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, null));
         const present_modes = a.alloc(c.VkPresentModeKHR, present_mode_count) catch { log.err("failed to alloc", .{}); @panic(""); };
-        check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, present_modes.ptr));
+        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, present_modes.ptr));
 
         return .{
             .capabilities = capabilities,
@@ -63,9 +62,9 @@ pub fn create(core: Core, window_extent: c.VkExtent2D ) @This() {
     const old_swapchain = null;
     const vsync = true;
     const desired_format = .{ .format = c.VK_FORMAT_B8G8R8A8_SRGB, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    const a = core.cpu_allocator;
+    const a = core.cpuallocator;
 
-    const support_info = SupportInfo.init(a, core.physical_device.handle, core.surface);
+    const support_info = SupportInfo.init(a, core.physicaldevice.handle, core.surface);
     defer support_info.deinit(a);
     var format = support_info.formats[0];
     for (support_info.formats) |f| {
@@ -119,10 +118,10 @@ pub fn create(core: Core, window_extent: c.VkExtent2D ) @This() {
         .oldSwapchain = old_swapchain,
     });
 
-    if (core.physical_device.graphics_queue_family != core.physical_device.present_queue_family) {
+    if (core.physicaldevice.graphics_queue_family != core.physicaldevice.present_queue_family) {
         const queue_family_indices: []const u32 = &.{
-            core.physical_device.graphics_queue_family,
-            core.physical_device.present_queue_family,
+            core.physicaldevice.graphics_queue_family,
+            core.physicaldevice.present_queue_family,
         };
         swapchain_info.imageSharingMode = c.VK_SHARING_MODE_CONCURRENT;
         swapchain_info.queueFamilyIndexCount = 2;
@@ -132,15 +131,15 @@ pub fn create(core: Core, window_extent: c.VkExtent2D ) @This() {
     }
 
     var swapchain: c.VkSwapchainKHR = undefined;
-    check_vk_panic(c.vkCreateSwapchainKHR(core.device.handle, &swapchain_info, alloc_cb, &swapchain));
+    debug.check_vk_panic(c.vkCreateSwapchainKHR(core.device.handle, &swapchain_info, alloc_cb, &swapchain));
     errdefer c.vkDestroySwapchainKHR(core.device.handle, swapchain, alloc_cb);
 
     // Try and fetch the images from the swpachain.
     var swapchain_image_count: u32 = undefined;
-    check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, null));
+    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, null));
     const swapchain_images = a.alloc(c.VkImage, swapchain_image_count) catch { log.err("failed to alloc", .{}); @panic(""); };
     errdefer a.free(swapchain_images);
-    check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, swapchain_images.ptr));
+    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, swapchain_images.ptr));
 
     // Create image views for the swapchain images.
     const swapchain_image_views = a.alloc(c.VkImageView, swapchain_image_count) catch { log.err("failed to alloc", .{}); @panic(""); };
@@ -220,16 +219,16 @@ fn create_swapchain_image_views(device: c.VkDevice, image:c.VkImage, format:c.Vk
     });
 
     var image_view: c.VkImageView = undefined;
-    check_vk_panic(c.vkCreateImageView(device, &view_info, alloc_cb, &image_view));
+    debug.check_vk_panic(c.vkCreateImageView(device, &view_info, alloc_cb, &image_view));
     return image_view;
 }
 
 pub fn resize(self: *@This(), core: *Core, extent: c.VkExtent2D) void {
-    check_vk(c.vkDeviceWaitIdle(core.device.handle)) catch |err| {
+    debug.check_vk(c.vkDeviceWaitIdle(core.device.handle)) catch |err| {
         std.log.err("Failed to wait for device idle with error: {s}", .{@errorName(err)});
         @panic("Failed to wait for device idle");
     };
-    self.deinit(core.device.handle, core.cpu_allocator);
+    self.deinit(core.device.handle, core.cpuallocator);
     core.swapchain = create(core.*,extent);
-    core.resize_request = false;
+    core.resizerequest = false;
 }

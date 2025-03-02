@@ -9,7 +9,7 @@ pub const LayoutBuilder = struct {
     const Self = @This();
 
     pub fn init(alloc: std.mem.Allocator) Self {
-        return .{ .bindings = .init(alloc) };
+        return .{ .bindings = std.ArrayList(c.VkDescriptorSetLayoutBinding).init(alloc) };
     }
 
     pub fn deinit(self: *Self) void {
@@ -220,39 +220,38 @@ pub fn init_descriptors(core: *Core) void {
         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
     };
 
-    core.global_descriptor_allocator.init(core.device.handle, 10, &sizes, core.cpu_allocator);
+    core.globaldescriptorallocator.init(core.device.handle, 10, &sizes, core.cpuallocator);
     // TODO: change to hashmap instead of array, or find a nice way to store
     { // draw image
-        var builder: LayoutBuilder = .init(core.cpu_allocator);
+        var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        core.descriptorlayouts[0] = builder.build(core.device.handle, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
+        core.descriptorsetlayouts[0] = builder.build(core.device.handle, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
     }
     { // scenedata uniform
-        var builder: LayoutBuilder = .init(core.cpu_allocator);
+        var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        core.descriptorlayouts[1] = builder.build(core.device.handle, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+        core.descriptorsetlayouts[1] = builder.build(core.device.handle, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
     }
     { // image and sampler, used for per frame swaping of images
-        var builder: LayoutBuilder = .init(core.cpu_allocator);
+        var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        core.descriptorlayouts[2] = builder.build(core.device.handle, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+        core.descriptorsetlayouts[2] = builder.build(core.device.handle, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
     }
 
     // draw image set here, only used for compute drawing
-    core.descriptorsets[0] = core.global_descriptor_allocator.allocate(core.device.handle, core.draw_image_descriptor_layout, null);
+    core.descriptorsets[0] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[0], null);
 
-    var writer: Writer = .init(core.cpu_allocator);
+    var writer: Writer = Writer.init(core.cpuallocator);
     defer writer.deinit();
-    writer.write_image(0, core.draw_image.view, null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    writer.update_set(core.device.handle, core.draw_image_descriptors);
+    writer.write_image(0, core.imageviews[0], null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    writer.update_set(core.device.handle, core.descriptorsets[0]);
 
     for (&core.framecontext.frames) |*frame| {
         var ratios = [_]Allocator.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
-        frame.frame_descriptors.init(core.device.handle, 1000, &ratios, core.cpu_allocator);
-        frame.buffer_deletion_queue.init(core.cpu_allocator);
+        frame.frame_descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
     }
     log.info("Initialized descriptors", .{});
 }
