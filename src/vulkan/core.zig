@@ -33,17 +33,19 @@ framecontext: FrameContext = .{},
 off_framecontext: OffFrameContext = .{},
 globaldescriptorallocator: descriptors.Allocator = undefined,
 luastate: ?*c.lua_State = undefined,
-pipelines: [1]c.VkPipeline = undefined,
-pipelinelayouts: [1]c.VkPipelineLayout = undefined,
-descriptorsetlayouts: [3]c.VkDescriptorSetLayout = undefined,
+pipelines: [2]c.VkPipeline = undefined,
+pipelinelayouts: [2]c.VkPipelineLayout = undefined,
+descriptorsetlayouts: [4]c.VkDescriptorSetLayout = undefined,
 descriptorsets: [1]c.VkDescriptorSet = undefined,
 allocatedimages: [2]image.AllocatedImage = undefined,
 imageviews: [2]c.VkImageView = undefined,
+formats: [2]c.VkFormat = undefined,
 extents3d: [1]c.VkExtent3D = undefined,
 extents2d: [1]c.VkExtent2D = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     var engine = Self{};
+    engine.extents2d[0] = .{ .width = 0, .height = 0 };
 
     engine.cpuallocator = allocator;
     var initallocator = std.heap.ArenaAllocator.init(engine.cpuallocator);
@@ -63,6 +65,7 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
 
     if (window) |w| {
         w.create_surface(engine.instance.handle, &engine.surface);
+        w.get_size(&engine.extents2d[0].width, &engine.extents2d[0].height);
     }
     defer if (window) |_| {
         c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vkallocationcallbacks);
@@ -72,7 +75,7 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     engine.device = Device.create(initallocatorinstance, engine.physicaldevice);
     defer c.vkDestroyDevice(engine.device.handle, vkallocationcallbacks);
 
-    engine.swapchain = Swapchain.create(engine, window.?.extent);
+    engine.swapchain = Swapchain.create(&engine, engine.extents2d[0]);
     defer engine.swapchain.deinit(engine.device.handle, engine.cpuallocator);
 
     const allocator_ci = std.mem.zeroInit(c.VmaAllocatorCreateInfo, .{
@@ -84,19 +87,27 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     debug.check_vk_panic(c.vmaCreateAllocator(&allocator_ci, &engine.gpuallocator));
     defer c.vmaDestroyAllocator(engine.gpuallocator);
 
-    engine.framecontext.init_frames(engine.physicaldevice, engine.device);
-    defer engine.framecontext.deinit(engine.device);
+    engine.framecontext.init_frames(engine.physicaldevice, engine.device.handle);
+    defer engine.framecontext.deinit(engine.device.handle);
 
     engine.off_framecontext.init(&engine);
-    defer engine.off_framecontext.deinit(engine.device);
+    defer engine.off_framecontext.deinit(engine.device.handle);
 
     engine.init_mesh_pipeline();
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
     defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
 
     image.create_draw_and_depth_image(&engine);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[0].image, engine.allocatedimages[0].allocation );
+    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[0], vkallocationcallbacks);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[1].image, engine.allocatedimages[1].allocation );
+    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[1], vkallocationcallbacks);
 
     descriptors.init_descriptors(&engine);
+    defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[0], vkallocationcallbacks);
+    defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[1], vkallocationcallbacks);
+    defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[2], vkallocationcallbacks);
+    defer engine.globaldescriptorallocator.deinit(engine.device.handle);
 
     // TODO fix this ugly ahh pointer thing
     const procAddr: c.PFN_vkCmdDrawMeshTasksEXT = @ptrCast(c.vkGetDeviceProcAddr(engine.device.handle, "vkCmdDrawMeshTasksEXT"));

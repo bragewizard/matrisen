@@ -78,21 +78,21 @@ pub fn create(alloc: std.mem.Allocator) Instance {
         debug = false;
     }
 
-    const app_info = std.mem.zeroInit(c.VkApplicationInfo, .{
+    const app_info : c.VkApplicationInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .apiVersion = api_version,
         .pApplicationName = engine_name,
         .pEngineName = engine_name,
-    });
+    };
 
-    const instance_info = std.mem.zeroInit(c.VkInstanceCreateInfo, .{
+    const instance_info : c.VkInstanceCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &app_info,
         .enabledLayerCount = @as(u32, @intCast(layers.items.len)),
         .ppEnabledLayerNames = layers.items.ptr,
         .enabledExtensionCount = @as(u32, @intCast(extensions.items.len)),
         .ppEnabledExtensionNames = extensions.items.ptr,
-    });
+    };
 
     var instance: c.VkInstance = undefined;
     check_vk_panic(c.vkCreateInstance(&instance_info, alloc_cb, &instance));

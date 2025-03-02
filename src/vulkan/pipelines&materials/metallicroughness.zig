@@ -1,6 +1,15 @@
 const c = @import("../../clibs.zig");
 const m = @import("../../3Dmath.zig");
-
+const descriptors = @import("../descriptors.zig");
+const image = @import("../image.zig");
+const std = @import("std");
+const Core = @import("../core.zig");
+const create_shader_module = @import("pipelinebuilder.zig").create_shader_module;
+const debug = @import("../debug.zig");
+const PipelineBuilder = @import("pipelinebuilder.zig");
+const vk_alloc_cbs = @import("../core.zig").vkallocationcallbacks;
+const log = std.log.scoped(.metalrough);
+const common = @import("common.zig");
 
 const MaterialConstantsUniform = struct {
     colorfactors: m.Vec4,
@@ -9,47 +18,42 @@ const MaterialConstantsUniform = struct {
 };
 
 const MaterialResources = struct {
-    colorimage: AllocatedImageAndView = undefined,
+    colorimage: image.AllocatedImage = undefined,
     colorsampler: c.VkSampler = undefined,
-    metalroughimage: AllocatedImageAndView = undefined,
+    metalroughimage: image.AllocatedImage = undefined,
     metalroughsampler: c.VkSampler = undefined,
     databuffer: c.VkBuffer = undefined,
     databuffer_offset: u32 = undefined,
 };
 
-
-opaque_pipeline: MaterialPipeline = undefined,
-transparent_pipeline: MaterialPipeline = undefined,
-materiallayout: c.VkDescriptorSetLayout = undefined,
 writer: descriptors.Writer,
 
-
 pub fn init(alloc: std.mem.Allocator) @This() {
-    return .{ .writer = d.DescriptorWriter.init(alloc) };
+    return .{ .writer = descriptors.Writer.init(alloc) };
 }
 
-pub fn build_pipelines(self: *@This(), engine: *Self) void {
+pub fn build_pipelines(self: *@This(), engine: *Core) void {
     const vertex_code align(4) = @embedFile("mesh.vert").*;
     const fragment_code align(4) = @embedFile("mesh.frag").*;
 
-    const vertex_module = vki.create_shader_module(engine.device, &vertex_code, vk_alloc_cbs) orelse null;
-    const fragment_module = vki.create_shader_module(engine.device, &fragment_code, vk_alloc_cbs) orelse null;
+    const vertex_module = create_shader_module(engine.device, &vertex_code, vk_alloc_cbs) orelse null;
+    const fragment_module = create_shader_module(engine.device, &fragment_code, vk_alloc_cbs) orelse null;
     if (vertex_module != null) log.info("Created vertex shader module", .{});
     if (fragment_module != null) log.info("Created fragment shader module", .{});
 
     defer c.vkDestroyShaderModule(engine.device, vertex_module, vk_alloc_cbs);
     defer c.vkDestroyShaderModule(engine.device, fragment_module, vk_alloc_cbs);
 
-    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(t.GPUDrawPushConstants), .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT };
+    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT };
 
-    var layout_builder = d.DescriptorLayoutBuilder{};
+    var layout_builder = descriptors.LayoutBuilder{};
     layout_builder.init(engine.cpu_allocator);
     defer layout_builder.deinit();
     layout_builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     layout_builder.add_binding(1, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     layout_builder.add_binding(2, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    self.materiallayout = layout_builder.build(engine.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    engine.descriptorsetlayouts[3] = layout_builder.build(engine.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
 
     const layouts = [_]c.VkDescriptorSetLayout{ engine.gpu_scene_data_descriptor_layout, self.materiallayout };
 
@@ -64,7 +68,7 @@ pub fn build_pipelines(self: *@This(), engine: *Self) void {
 
     var newlayout: c.VkPipelineLayout = undefined;
 
-    check_vk(c.vkCreatePipelineLayout(engine.device, &mesh_layout_info, null, &newlayout)) catch @panic("Failed to create pipeline layout");
+    debug.check_vk(c.vkCreatePipelineLayout(engine.device, &mesh_layout_info, null, &newlayout)) catch @panic("Failed to create pipeline layout");
 
     self.opaque_pipeline.layout = newlayout;
     self.transparent_pipeline.layout = newlayout;
@@ -79,8 +83,8 @@ pub fn build_pipelines(self: *@This(), engine: *Self) void {
     pipelineBuilder.disable_blending();
     pipelineBuilder.enable_depthtest(true, c.VK_COMPARE_OP_GREATER_OR_EQUAL);
 
-    pipelineBuilder.set_color_attachment_format(engine.draw_image_format);
-    pipelineBuilder.set_depth_format(engine.depth_image_format);
+    pipelineBuilder.set_color_attachment_format(engine.swapchain.format);
+    pipelineBuilder.set_depth_format(engine.formats[0]);
 
     pipelineBuilder.pipeline_layout = newlayout;
 
@@ -101,7 +105,7 @@ fn clear_resources(self: *@This(), device: c.VkDevice) void {
     self.writer.deinit();
 }
 
-fn write_material(self: *@This(), device: c.VkDevice, pass: t.MaterialPass, resources: MaterialResources, descriptor_allocator: *d.DescriptorAllocatorGrowable) t.MaterialInstance {
+fn write_material(self: *@This(), device: c.VkDevice, pass: MaterialPass, resources: MaterialResources, descriptor_allocator: *d.DescriptorAllocatorGrowable) t.MaterialInstance {
     var matdata = MaterialInstance{};
     matdata.passtype = pass;
     if (pass == .Transparent) {

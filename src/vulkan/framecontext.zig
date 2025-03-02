@@ -25,7 +25,7 @@ pub const FrameContext = struct {
 };
 
 
-pub fn init_frames(self: *Self, physical_device: PhysicalDevice, device: Device) void {
+pub fn init_frames(self: *Self, physical_device: PhysicalDevice, device: c.VkDevice) void {
     const semaphore_ci = c.VkSemaphoreCreateInfo {
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
@@ -37,23 +37,24 @@ pub fn init_frames(self: *Self, physical_device: PhysicalDevice, device: Device)
 
     for (&self.frames) |*frame| {
         const command_pool_info = graphics_cmd_pool_info(physical_device);
-        debug.check_vk_panic(c.vkCreateCommandPool(device.handle, &command_pool_info, vk_alloc_cbs, &frame.command_pool));
+        debug.check_vk_panic(c.vkCreateCommandPool(device, &command_pool_info, vk_alloc_cbs, &frame.command_pool));
         const command_buffer_info = graphics_cmdbuffer_info(frame.command_pool);
-        debug.check_vk_panic(c.vkAllocateCommandBuffers(device.handle, &command_buffer_info, &frame.command_buffer));
-        debug.check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
-        debug.check_vk_panic(c.vkCreateSemaphore(device.handle, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
-        debug.check_vk_panic(c.vkCreateFence(device.handle, &fence_ci, vk_alloc_cbs, &frame.render_fence));
-
+        debug.check_vk_panic(c.vkAllocateCommandBuffers(device, &command_buffer_info, &frame.command_buffer));
+        debug.check_vk_panic(c.vkCreateSemaphore(device, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
+        debug.check_vk_panic(c.vkCreateSemaphore(device, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
+        debug.check_vk_panic(c.vkCreateFence(device, &fence_ci, vk_alloc_cbs, &frame.render_fence));
+        
         log.info("Created framecontext", .{});
     }    
 }
 
-pub fn deinit(self: *Self, device: Device) void {
+pub fn deinit(self: *Self, device: c.VkDevice) void {
     for (&self.frames) |*frame| {
-        c.vkDestroyCommandPool(device.handle, frame.command_pool , vk_alloc_cbs);
-        c.vkDestroyFence(device.handle, frame.render_fence, vk_alloc_cbs);
-        c.vkDestroySemaphore(device.handle, frame.render_semaphore, vk_alloc_cbs);
-        c.vkDestroySemaphore(device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
+        c.vkDestroyCommandPool(device, frame.command_pool , vk_alloc_cbs);
+        c.vkDestroyFence(device, frame.render_fence, vk_alloc_cbs);
+        c.vkDestroySemaphore(device, frame.render_semaphore, vk_alloc_cbs);
+        c.vkDestroySemaphore(device, frame.swapchain_semaphore, vk_alloc_cbs);
+        frame.frame_descriptors.deinit(device);
     }    
 }
 

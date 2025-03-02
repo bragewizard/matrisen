@@ -16,12 +16,18 @@ pub const SupportInfo = struct {
 
         var format_count: u32 = undefined;
         debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, null));
-        const formats = a.alloc(c.VkSurfaceFormatKHR, format_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+        const formats = a.alloc(c.VkSurfaceFormatKHR, format_count) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
         debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, formats.ptr));
 
         var present_mode_count: u32 = undefined;
         debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, null));
-        const present_modes = a.alloc(c.VkPresentModeKHR, present_mode_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+        const present_modes = a.alloc(c.VkPresentModeKHR, present_mode_count) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
         debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, present_modes.ptr));
 
         return .{
@@ -55,10 +61,8 @@ pub const CreateOpts = struct {
 handle: c.VkSwapchainKHR = null,
 images: []c.VkImage = &.{},
 image_views: []c.VkImageView = &.{},
-format: c.VkFormat = undefined,
-extent: c.VkExtent2D = undefined,
 
-pub fn create(core: Core, window_extent: c.VkExtent2D ) @This() {
+pub fn create(core: *Core, window_extent: c.VkExtent2D) @This() {
     const old_swapchain = null;
     const vsync = true;
     const desired_format = .{ .format = c.VK_FORMAT_B8G8R8A8_SRGB, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
@@ -137,26 +141,32 @@ pub fn create(core: Core, window_extent: c.VkExtent2D ) @This() {
     // Try and fetch the images from the swpachain.
     var swapchain_image_count: u32 = undefined;
     debug.check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, null));
-    const swapchain_images = a.alloc(c.VkImage, swapchain_image_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+    const swapchain_images = a.alloc(c.VkImage, swapchain_image_count) catch {
+        log.err("failed to alloc", .{});
+        @panic("");
+    };
     errdefer a.free(swapchain_images);
     debug.check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, swapchain_images.ptr));
 
     // Create image views for the swapchain images.
-    const swapchain_image_views = a.alloc(c.VkImageView, swapchain_image_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+    const swapchain_image_views = a.alloc(c.VkImageView, swapchain_image_count) catch {
+        log.err("failed to alloc", .{});
+        @panic("");
+    };
     errdefer a.free(swapchain_image_views);
 
     for (swapchain_images, swapchain_image_views) |image, *view| {
         view.* = create_swapchain_image_views(core.device.handle, image, format.format);
     }
 
+    core.extents2d[0] = extent;
+    core.formats[0] = format.format;
+
     return .{
         .handle = swapchain,
         .images = swapchain_images,
         .image_views = swapchain_image_views,
-        .format = format.format,
-        .extent = extent,
     };
-
 }
 
 pub fn deinit(self: *@This(), device: c.VkDevice, a: std.mem.Allocator) void {
@@ -202,7 +212,7 @@ fn make_extent(capabilities: c.VkSurfaceCapabilitiesKHR, opts: CreateOpts) c.VkE
     return extent;
 }
 
-fn create_swapchain_image_views(device: c.VkDevice, image:c.VkImage, format:c.VkFormat) c.VkImageView {
+fn create_swapchain_image_views(device: c.VkDevice, image: c.VkImage, format: c.VkFormat) c.VkImageView {
     const view_info = std.mem.zeroInit(c.VkImageViewCreateInfo, .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = image,
@@ -210,7 +220,7 @@ fn create_swapchain_image_views(device: c.VkDevice, image:c.VkImage, format:c.Vk
         .format = format,
         .components = .{ .r = c.VK_COMPONENT_SWIZZLE_IDENTITY, .g = c.VK_COMPONENT_SWIZZLE_IDENTITY, .b = c.VK_COMPONENT_SWIZZLE_IDENTITY, .a = c.VK_COMPONENT_SWIZZLE_IDENTITY },
         .subresourceRange = .{
-            .aspectMask =  c.VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
             .levelCount = 1,
             .baseArrayLayer = 0,
@@ -229,6 +239,6 @@ pub fn resize(self: *@This(), core: *Core, extent: c.VkExtent2D) void {
         @panic("Failed to wait for device idle");
     };
     self.deinit(core.device.handle, core.cpuallocator);
-    core.swapchain = create(core.*,extent);
+    core.swapchain = create(core, extent);
     core.resizerequest = false;
 }

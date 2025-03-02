@@ -104,8 +104,8 @@ pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, asp
 
 pub fn create_draw_and_depth_image(core: *Core) void {
     const extent: c.VkExtent3D = .{
-        .width = core.swapchain.extent.width,
-        .height = core.swapchain.extent.height,
+        .width = core.extents2d[0].width,
+        .height = core.extents2d[0].height,
         .depth = 1,
     };
 

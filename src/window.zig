@@ -5,14 +5,13 @@ const vkallocationcallbacks = @import("vulkan/core.zig").vkallocationcallbacks;
 const Self = @This();
 
 sdl_window: *c.SDL_Window,
-extent: c.VkExtent2D,
 
-pub fn init(window_extent: c.VkExtent2D) Self {
+pub fn init(width: u32, height: u32) Self {
     check_sdl_bool(c.SDL_Init(c.SDL_INIT_VIDEO));
     const flags = c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE | c.SDL_WINDOW_UTILITY;
-    const window = c.SDL_CreateWindow("matrisen", @intCast(window_extent.width), @intCast(window_extent.height), flags) orelse @panic("Failed to create SDL window");
+    const window = c.SDL_CreateWindow("matrisen", @intCast(width), @intCast(height), flags) orelse @panic("Failed to create SDL window");
     check_sdl_bool(c.SDL_ShowWindow(window));
-    return .{ .sdl_window = window, .extent = window_extent };
+    return .{ .sdl_window = window };
 }
 
 pub fn deinit(self: *Self) void {
@@ -24,12 +23,12 @@ pub fn create_surface(self: *Self, instance: c.VkInstance, surface: *c.VkSurface
     check_sdl_bool(c.SDL_Vulkan_CreateSurface(self.sdl_window, instance, vkallocationcallbacks, surface));
 }
 
-pub fn resize(self: *Self) void {
-    var width: c_int = undefined;
-    var height: c_int = undefined;
-    check_sdl_bool(c.SDL_GetWindowSize(self.sdl_window, &width, &height));
-    self.extent.width = @intCast(width);
-    self.extent.height = @intCast(height);
+pub fn get_size(self: *Self, width: *u32, height: *u32) void {
+    var w: c_int = undefined;
+    var h: c_int = undefined;
+    check_sdl_bool(c.SDL_GetWindowSize(self.sdl_window, &w, &h));
+    width.* = @intCast(w);
+    height.* = @intCast(h);
 }
 
 // pub fn handle_key_up(engine:*e, key_event: c.SDL_KeyboardEvent) void {

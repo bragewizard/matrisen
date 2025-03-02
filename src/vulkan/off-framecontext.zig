@@ -36,9 +36,9 @@ pub fn init(self : *Self, core : *Core) void {
     debug.check_vk(c.vkAllocateCommandBuffers(core.device.handle, &upload_command_buffer_ai, &self.command_buffer)) catch @panic("Failed to allocate upload command buffer");
 }
 
-pub fn deinit(self: *Self, device: Device) void {
-    c.vkDestroyCommandPool(device.handle, self.command_pool , Core.vkallocationcallbacks);
-    c.vkDestroyFence(device.handle, self.fence, Core.vkallocationcallbacks);
+pub fn deinit(self: *Self, device: c.VkDevice) void {
+    c.vkDestroyCommandPool(device, self.command_pool , Core.vkallocationcallbacks);
+    c.vkDestroyFence(device, self.fence, Core.vkallocationcallbacks);
 }
 
 pub fn submit(self: *@This(), submit_ctx: anytype) void {

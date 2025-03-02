@@ -43,7 +43,7 @@ pub fn draw(core: *Core) void {
     //     .layerCount = 1,
     // };
     // c.vkCmdClearColorImage(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
-    const extent = core.swapchain.extent;
+    const extent = core.extents2d[0];
 
     const color_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,

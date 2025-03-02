@@ -38,8 +38,8 @@ pub fn loop(engine: *Core, window: *Window) void {
             timer.reset();
         }
         if (engine.resizerequest) {
-            window.resize();
-            engine.swapchain.resize(engine, window.extent);
+            window.get_size(&engine.extents2d[0].width, &engine.extents2d[0].height);
+            engine.swapchain.resize(engine, engine.extents2d[0]);
         }
         draw(engine);
     }
