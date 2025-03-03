@@ -11,8 +11,8 @@ pub fn init_mesh_pipeline(core: *Core) void {
     const mesh_code align(4) = @embedFile("simple.mesh").*;
     const fragment_code align(4) = @embedFile("simple.frag").*;
 
-    const mesh_module = create_shader_module(core, &mesh_code, vk_alloc_cbs) orelse null;
-    const fragment_module = create_shader_module(core, &fragment_code, vk_alloc_cbs) orelse null;
+    const mesh_module = create_shader_module(core.device.handle, &mesh_code, vk_alloc_cbs) orelse null;
+    const fragment_module = create_shader_module(core.device.handle, &fragment_code, vk_alloc_cbs) orelse null;
     if (mesh_module != null) log.info("Created mesh shader module", .{});
     if (fragment_module != null) log.info("Created fragment shader module", .{});
 

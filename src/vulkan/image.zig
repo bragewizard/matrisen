@@ -61,10 +61,10 @@ pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, asp
     return image_view;
 }
 
-fn create_upload(core: *Core, data: *anyopaque, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags, mipmapped: bool) AllocatedImage {
+pub fn create_upload(core: *Core, data: *anyopaque, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags, mipmapped: bool) AllocatedImage {
     const data_size = size.width * size.height * size.depth * 4;
 
-    const staging = buffer.create(data_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    const staging = buffer.create(core, data_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
     defer c.vmaDestroyBuffer(core.gpuallocator, staging.buffer, staging.allocation);
 
     const byte_data = @as([*]u8, @ptrCast(staging.info.pMappedData.?));

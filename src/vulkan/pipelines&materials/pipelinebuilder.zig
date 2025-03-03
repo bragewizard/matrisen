@@ -205,7 +205,7 @@ pub fn enable_blending_alpha(self: *Self) void {
     self.color_blend_attachment.colorWriteMask = c.VK_COLOR_COMPONENT_R_BIT | c.VK_COLOR_COMPONENT_G_BIT | c.VK_COLOR_COMPONENT_B_BIT | c.VK_COLOR_COMPONENT_A_BIT;
 }
 
-pub fn create_shader_module(core: *Core, code: []const u8, alloc_callback: ?*c.VkAllocationCallbacks) ?c.VkShaderModule {
+pub fn create_shader_module(device: c.VkDevice, code: []const u8, alloc_callback: ?*c.VkAllocationCallbacks) ?c.VkShaderModule {
     std.debug.assert(code.len % 4 == 0);
 
     const data: *const u32 = @alignCast(@ptrCast(code.ptr));
@@ -217,7 +217,7 @@ pub fn create_shader_module(core: *Core, code: []const u8, alloc_callback: ?*c.V
     });
 
     var shader_module: c.VkShaderModule = undefined;
-    check_vk(c.vkCreateShaderModule(core.device.handle, &shader_module_ci, alloc_callback, &shader_module)) catch |err| {
+    check_vk(c.vkCreateShaderModule(device, &shader_module_ci, alloc_callback, &shader_module)) catch |err| {
         log.err("Failed to create shader module with error: {s}", .{@errorName(err)});
         return null;
     };

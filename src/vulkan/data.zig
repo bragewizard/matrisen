@@ -9,16 +9,16 @@ const std = @import("std");
 const buffer = @import("buffer.zig");
 
 pub fn init_default(core: *Core) void {
-    core.meshassets[0] = gltf.load_meshes(core, "assets/icosphere.glb") catch @panic("Failed to load mesh");
+    core.meshassets = gltf.load_meshes(core, "assets/icosphere.glb") catch @panic("Failed to load mesh");
     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
     var white: u32 = m.Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
     var grey: u32 = m.Vec4.packU8(.{ .x = 0.3, .y = 0.3, .z = 0.3, .w = 1 });
     var black: u32 = m.Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 0 });
     const magenta: u32 = m.Vec4.packU8(.{ .x = 1, .y = 0, .z = 1, .w = 1 });
 
-    core.allocatedimages[2] = image.create_upload(&white, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
-    core.allocatedimages[3] = image.create_upload(&grey, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
-    core.allocatedimages[4] = image.create_upload(&black, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
+    core.allocatedimages[2] = image.create_upload(core, &white, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
+    core.allocatedimages[3] = image.create_upload(core, &grey, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
+    core.allocatedimages[4] = image.create_upload(core, &black, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
 
     var checker = [_]u32{0} ** (16 * 16);
     for (0..16) |x| {
@@ -28,7 +28,7 @@ pub fn init_default(core: *Core) void {
         }
     }
 
-    core.allocatedimages[5] = image.create_upload(&checker, .{ .width = 16, .height = 16, .depth = 1 }, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
+    core.allocatedimages[5] = image.create_upload(core, &checker, .{ .width = 16, .height = 16, .depth = 1 }, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
 
     var sampl = c.VkSamplerCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -47,14 +47,15 @@ pub fn init_default(core: *Core) void {
     materialresources.metalroughimage = core.allocatedimages[2];
     materialresources.metalroughsampler = core.samplers[1];
 
-    const materialconstants = buffer.create_buffer(@sizeOf(metalrough.MaterialConstants), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    const materialconstants = buffer.create(core, @sizeOf(metalrough.MaterialConstantsUniform), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    var sceneuniformdata = @as(*metalrough.MaterialConstants, @alignCast(@ptrCast(materialconstants.info.pMappedData.?)));
+    var sceneuniformdata = @as(*metalrough.MaterialConstantsUniform, @alignCast(@ptrCast(materialconstants.info.pMappedData.?)));
     sceneuniformdata.colorfactors = m.Vec4{ .x = 1, .y = 1, .z = 1, .w = 1 };
     sceneuniformdata.metalrough_factors = m.Vec4{ .x = 1, .y = 0.5, .z = 1, .w = 1 };
     materialresources.databuffer = materialconstants.buffer;
     materialresources.databuffer_offset = 0;
-    core.defaultdata = core.metalroughmaterial.write_material(core.device, metalrough.MaterialPass.MainColor, materialresources, &core.global_descriptor_allocator);
+    core.defaultdata = metalrough.init(core.cpuallocator);
+    core.defaultdata.write_material(core.device, metalrough.MaterialPass.MainColor, materialresources, &core.globaldescriptorallocator);
 
     std.log.info("Initialized default data", .{});
 }

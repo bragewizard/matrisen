@@ -13,6 +13,7 @@ const commands = @import("commands.zig");
 const image = @import("image.zig");
 const descriptors = @import("descriptors.zig");
 const init_mesh_pipeline = @import("pipelines&materials/meshpipeline.zig").init_mesh_pipeline;
+const metalrough = @import("pipelines&materials/metallicroughness.zig");
 const loop = @import("../applications/test.zig").loop;
 const gltf = @import("gltf.zig");
 const data = @import("data.zig");
@@ -37,14 +38,15 @@ luastate: ?*c.lua_State = undefined,
 formats: [2]c.VkFormat = undefined,
 extents3d: [1]c.VkExtent3D = undefined,
 extents2d: [1]c.VkExtent2D = undefined,
-pipelines: [2]c.VkPipeline = undefined,
-pipelinelayouts: [2]c.VkPipelineLayout = undefined,
+pipelines: [3]c.VkPipeline = undefined,
+pipelinelayouts: [3]c.VkPipelineLayout = undefined,
 descriptorsetlayouts: [4]c.VkDescriptorSetLayout = undefined,
 descriptorsets: [1]c.VkDescriptorSet = undefined,
 allocatedimages: [6]image.AllocatedImage = undefined,
 imageviews: [2]c.VkImageView = undefined,
 samplers: [2]c.VkSampler = undefined,
-meshassets: [1]gltf.MeshAsset = undefined,
+meshassets: std.ArrayList(gltf.MeshAsset) = undefined,
+defaultdata: metalrough = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     var engine = Self{};
@@ -95,6 +97,9 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
 
     engine.off_framecontext.init(&engine);
     defer engine.off_framecontext.deinit(engine.device.handle);
+
+    engine.defaultdata = metalrough.init(engine.cpuallocator);
+    engine.defaultdata.build_pipelines(&engine);
 
     engine.init_mesh_pipeline();
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);

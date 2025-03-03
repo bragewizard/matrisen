@@ -11,13 +11,13 @@ const vk_alloc_cbs = @import("../core.zig").vkallocationcallbacks;
 const log = std.log.scoped(.metalrough);
 const common = @import("common.zig");
 
-const MaterialConstantsUniform = struct {
+pub const MaterialConstantsUniform = struct {
     colorfactors: m.Vec4,
     metalrough_factors: m.Vec4,
     padding: [14]m.Vec4,
 };
 
-const MaterialResources = struct {
+pub const MaterialResources = struct {
     colorimage: image.AllocatedImage = undefined,
     colorsampler: c.VkSampler = undefined,
     metalroughimage: image.AllocatedImage = undefined,
@@ -36,8 +36,8 @@ pub fn build_pipelines(self: *@This(), engine: *Core) void {
     const vertex_code align(4) = @embedFile("mesh.vert").*;
     const fragment_code align(4) = @embedFile("mesh.frag").*;
 
-    const vertex_module = create_shader_module(engine.device, &vertex_code, vk_alloc_cbs) orelse null;
-    const fragment_module = create_shader_module(engine.device, &fragment_code, vk_alloc_cbs) orelse null;
+    const vertex_module = create_shader_module(engine.device.handle, &vertex_code, vk_alloc_cbs) orelse null;
+    const fragment_module = create_shader_module(engine.device.handle, &fragment_code, vk_alloc_cbs) orelse null;
     if (vertex_module != null) log.info("Created vertex shader module", .{});
     if (fragment_module != null) log.info("Created fragment shader module", .{});
 
@@ -46,16 +46,15 @@ pub fn build_pipelines(self: *@This(), engine: *Core) void {
 
     const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT };
 
-    var layout_builder = descriptors.LayoutBuilder{};
-    layout_builder.init(engine.cpu_allocator);
+    var layout_builder : descriptors.LayoutBuilder = descriptors.LayoutBuilder.init(engine.cpuallocator);
     defer layout_builder.deinit();
     layout_builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     layout_builder.add_binding(1, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     layout_builder.add_binding(2, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    engine.descriptorsetlayouts[3] = layout_builder.build(engine.device, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    engine.descriptorsetlayouts[3] = layout_builder.build(engine.device.handle, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
 
-    const layouts = [_]c.VkDescriptorSetLayout{ engine.gpu_scene_data_descriptor_layout, self.materiallayout };
+    const layouts = [_]c.VkDescriptorSetLayout{ engine.descriptorsetlayouts[1], self.materiallayout };
 
     const mesh_layout_info = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -70,8 +69,7 @@ pub fn build_pipelines(self: *@This(), engine: *Core) void {
 
     debug.check_vk(c.vkCreatePipelineLayout(engine.device, &mesh_layout_info, null, &newlayout)) catch @panic("Failed to create pipeline layout");
 
-    self.opaque_pipeline.layout = newlayout;
-    self.transparent_pipeline.layout = newlayout;
+    engine.pipelinelayouts[1] = newlayout;
 
     var pipelineBuilder = PipelineBuilder.init(engine.cpu_allocator);
     defer pipelineBuilder.deinit();
@@ -88,13 +86,12 @@ pub fn build_pipelines(self: *@This(), engine: *Core) void {
 
     pipelineBuilder.pipeline_layout = newlayout;
 
-    self.opaque_pipeline.pipeline = pipelineBuilder.build_pipeline(engine.device);
+    engine.pipelines[1] = pipelineBuilder.build_pipeline(engine.device);
 
     pipelineBuilder.enable_blending_additive();
     pipelineBuilder.enable_depthtest(false, c.VK_COMPARE_OP_GREATER_OR_EQUAL);
 
-    self.transparent_pipeline.pipeline = pipelineBuilder.build_pipeline(engine.device);
-    std.debug.print("init_pipelines {*}\n", .{&self.opaque_pipeline});
+    engine.pipelines[2] = pipelineBuilder.build_pipeline(engine.device);
 }
 
 fn clear_resources(self: *@This(), device: c.VkDevice) void {
@@ -105,7 +102,7 @@ fn clear_resources(self: *@This(), device: c.VkDevice) void {
     self.writer.deinit();
 }
 
-fn write_material(self: *@This(), device: c.VkDevice, pass: common.MaterialPass, resources: MaterialResources, descriptor_allocator: *descriptors.AllocatorGrowable) common.MaterialInstance {
+pub fn write_material(self: *@This(), device: c.VkDevice, pass: common.MaterialPass, resources: MaterialResources, descriptor_allocator: *descriptors.AllocatorGrowable) common.MaterialInstance {
     var matdata = common.MaterialInstance{};
     matdata.passtype = pass;
     if (pass == .Transparent) {

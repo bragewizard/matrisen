@@ -1,4 +1,5 @@
 const std = @import("std");
+const Buf = @import("buffer.zig");
 const engine = @import("core.zig");
 const config = @import("config");
 const Vertex = @import("buffer.zig").Vertex;
@@ -516,9 +517,7 @@ pub fn load_meshes(eng: *engine, path: []const u8) !ArrayList(MeshAsset) {
                 v.color = .{ .x = (v.normal.x + 1) / 2, .y = (v.normal.y + 1) / 2, .z = (v.normal.z + 1) / 2, .w = 1.0 };
             }
         }
-        new_mesh.mesh_buffers = eng.upload_mesh(indices.items, vertices.items);
-        eng.buffer_deletion_queue.push(new_mesh.mesh_buffers.index_buffer);
-        eng.buffer_deletion_queue.push(new_mesh.mesh_buffers.vertex_buffer);
+        new_mesh.mesh_buffers = Buf.upload_mesh(eng, indices.items, vertices.items);
         try meshes.append(new_mesh);
     }
     return meshes;
