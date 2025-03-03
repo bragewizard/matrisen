@@ -1,7 +1,7 @@
 const std = @import("std");
 const engine = @import("core.zig");
-const types = @import("types.zig");
 const config = @import("config");
+const Vertex = @import("buffer.zig").Vertex;
 const Mat4 = @import("../3Dmath.zig").Mat4;
 const Vec3 = @import("../3Dmath.zig").Vec3;
 const Quat = @import("../3Dmath.zig").Quat;
@@ -26,7 +26,7 @@ const GeoSurface = struct {
     count: u32,
 };
 
-const MeshAsset = struct {
+pub const MeshAsset = struct {
     name: []const u8,
     surfaces: std.ArrayList(GeoSurface),
     mesh_buffers: MeshBuffers = undefined,
@@ -398,25 +398,25 @@ pub const LightSpot = struct {
 };
 
 pub const Data = struct {
-    asset: types.Asset,
-    scene: ?types.Index = null,
-    scenes: ArrayList(types.Scene),
-    cameras: ArrayList(types.Camera),
-    nodes: ArrayList(types.Node),
-    meshes: ArrayList(types.Mesh),
-    materials: ArrayList(types.Material),
-    skins: ArrayList(types.Skin),
-    samplers: ArrayList(types.TextureSampler),
-    images: ArrayList(types.Image),
-    animations: ArrayList(types.Animation),
-    textures: ArrayList(types.Texture),
-    accessors: ArrayList(types.Accessor),
-    buffer_views: ArrayList(types.BufferView),
-    buffers: ArrayList(types.Buffer),
-    lights: ArrayList(types.Light),
+    asset: Asset,
+    scene: ?Index = null,
+    scenes: ArrayList(Scene),
+    cameras: ArrayList(Camera),
+    nodes: ArrayList(Node),
+    meshes: ArrayList(Mesh),
+    materials: ArrayList(Material),
+    skins: ArrayList(Skin),
+    samplers: ArrayList(TextureSampler),
+    images: ArrayList(Image),
+    animations: ArrayList(Animation),
+    textures: ArrayList(Texture),
+    accessors: ArrayList(Accessor),
+    buffer_views: ArrayList(BufferView),
+    buffers: ArrayList(Buffer),
+    lights: ArrayList(Light),
 };
 
-pub fn load_gltf_meshes(eng: *engine, path: []const u8) !ArrayList(types.MeshAsset) {
+pub fn load_meshes(eng: *engine, path: []const u8) !ArrayList(MeshAsset) {
     log.info("Loading gltf file: {s}", .{path});
     const allocator = std.heap.page_allocator;
     const file = try std.fs.cwd().readFileAllocOptions(allocator, path, 1_512_000, null, 4, null);
@@ -426,17 +426,17 @@ pub fn load_gltf_meshes(eng: *engine, path: []const u8) !ArrayList(types.MeshAss
 
     try gltf.parse(file);
 
-    var meshes = ArrayList(types.MeshAsset).init(allocator);
-    var vertices = ArrayList(types.Vertex).init(allocator);
+    var meshes = ArrayList(MeshAsset).init(allocator);
+    var vertices = ArrayList(Vertex).init(allocator);
     var indices = ArrayList(u32).init(allocator);
     defer {
         vertices.deinit();
         indices.deinit();
     }
     for (gltf.data.meshes.items) |mesh| {
-        var new_mesh: types.MeshAsset = .{
+        var new_mesh: MeshAsset = .{
             .name = mesh.name,
-            .surfaces = ArrayList(types.GeoSurface).init(allocator),
+            .surfaces = ArrayList(GeoSurface).init(allocator),
         };
 
         indices.clearAndFree();
@@ -448,7 +448,7 @@ pub fn load_gltf_meshes(eng: *engine, path: []const u8) !ArrayList(types.MeshAss
                 log.err("No indices found for mesh: {s}", .{mesh.name});
                 unreachable;
             };
-            const new_surface: types.GeoSurface = .{
+            const new_surface: GeoSurface = .{
                 .start_index = @intCast(indices.items.len),
                 .count = @intCast(accessor.count),
             };
@@ -471,7 +471,7 @@ pub fn load_gltf_meshes(eng: *engine, path: []const u8) !ArrayList(types.MeshAss
                         var it = accessor.iterator(f32, &gltf, gltf.glb_binary.?);
                         var i: u32 = 0;
                         while (it.next()) |v| : (i += 1) {
-                            const new_vtx = types.Vertex{
+                            const new_vtx = Vertex{
                                 .position = .{ .x = v[0], .y = v[1], .z = v[2] },
                                 .normal = .{ .x = 1, .y = 0, .z = 0 },
                                 .color = .{ .x = 1, .y = 1, .z = 1, .w = 1 },
@@ -535,21 +535,21 @@ pub fn init(allocator: Allocator) Self {
     return Self{
         .arena = arena,
         .data = .{
-            .asset = types.Asset{ .version = "Undefined" },
-            .scenes = ArrayList(types.Scene).init(alloc),
-            .nodes = ArrayList(types.Node).init(alloc),
-            .cameras = ArrayList(types.Camera).init(alloc),
-            .meshes = ArrayList(types.Mesh).init(alloc),
-            .materials = ArrayList(types.Material).init(alloc),
-            .skins = ArrayList(types.Skin).init(alloc),
-            .samplers = ArrayList(types.TextureSampler).init(alloc),
-            .images = ArrayList(types.Image).init(alloc),
-            .animations = ArrayList(types.Animation).init(alloc),
-            .textures = ArrayList(types.Texture).init(alloc),
-            .accessors = ArrayList(types.Accessor).init(alloc),
-            .buffer_views = ArrayList(types.BufferView).init(alloc),
-            .buffers = ArrayList(types.Buffer).init(alloc),
-            .lights = ArrayList(types.Light).init(alloc),
+            .asset = Asset{ .version = "Undefined" },
+            .scenes = ArrayList(Scene).init(alloc),
+            .nodes = ArrayList(Node).init(alloc),
+            .cameras = ArrayList(Camera).init(alloc),
+            .meshes = ArrayList(Mesh).init(alloc),
+            .materials = ArrayList(Material).init(alloc),
+            .skins = ArrayList(Skin).init(alloc),
+            .samplers = ArrayList(TextureSampler).init(alloc),
+            .images = ArrayList(Image).init(alloc),
+            .animations = ArrayList(Animation).init(alloc),
+            .textures = ArrayList(Texture).init(alloc),
+            .accessors = ArrayList(Accessor).init(alloc),
+            .buffer_views = ArrayList(BufferView).init(alloc),
+            .buffers = ArrayList(Buffer).init(alloc),
+            .lights = ArrayList(Light).init(alloc),
         },
     };
 }
@@ -619,7 +619,7 @@ pub fn getDataFromBufferView(
     self: *const Self,
     comptime T: type,
     list: *ArrayList(T),
-    accessor: types.Accessor,
+    accessor: Accessor,
     binary: []const u8,
 ) void {
     if (switch (accessor.component_type) {
@@ -684,7 +684,7 @@ pub fn deinit(self: *Self) void {
     self.arena.child_allocator.destroy(self.arena);
 }
 
-pub fn getLocalTransform(node: types.Node) Mat4 {
+pub fn getLocalTransform(node: Node) Mat4 {
     return blk: {
         if (node.matrix) |mat4x4| {
             break :blk .{
@@ -703,7 +703,7 @@ pub fn getLocalTransform(node: types.Node) Mat4 {
     };
 }
 
-pub fn getGlobalTransform(data: *const Data, node: types.Node) Mat4 {
+pub fn getGlobalTransform(data: *const Data, node: Node) Mat4 {
     var parent_index = node.parent;
     var node_transform: Mat4 = getLocalTransform(node);
 
@@ -845,9 +845,9 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (nodes.array.items, 0..) |item, index| {
             const object = item.object;
 
-            var node = types.Node{
+            var node = Node{
                 .name = undefined,
-                .children = ArrayList(types.Index).init(alloc),
+                .children = ArrayList(Index).init(alloc),
             };
 
             if (object.get("name")) |name| {
@@ -908,7 +908,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
             if (object.get("extensions")) |extensions| {
                 if (extensions.object.get("KHR_lights_punctual")) |lights_punctual| {
                     if (lights_punctual.object.get("light")) |light| {
-                        node.light = @as(types.Index, @intCast(light.integer));
+                        node.light = @as(Index, @intCast(light.integer));
                     }
                 }
             }
@@ -921,7 +921,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (cameras.array.items, 0..) |item, index| {
             const object = item.object;
 
-            var camera = types.Camera{
+            var camera = Camera{
                 .name = undefined,
                 .type = undefined,
             };
@@ -982,9 +982,9 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (skins.array.items, 0..) |item, index| {
             const object = item.object;
 
-            var skin = types.Skin{
+            var skin = Skin{
                 .name = undefined,
-                .joints = ArrayList(types.Index).init(alloc),
+                .joints = ArrayList(Index).init(alloc),
             };
 
             if (object.get("name")) |name| {
@@ -1015,9 +1015,9 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (meshes.array.items, 0..) |item, index| {
             const object = item.object;
 
-            var mesh: types.Mesh = .{
+            var mesh: Mesh = .{
                 .name = undefined,
-                .primitives = ArrayList(types.Primitive).init(alloc),
+                .primitives = ArrayList(Primitive).init(alloc),
             };
 
             if (object.get("name")) |name| {
@@ -1028,12 +1028,12 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
 
             if (object.get("primitives")) |primitives| {
                 for (primitives.array.items) |prim_item| {
-                    var primitive: types.Primitive = .{
-                        .attributes = ArrayList(types.Attribute).init(alloc),
+                    var primitive: Primitive = .{
+                        .attributes = ArrayList(Attribute).init(alloc),
                     };
 
                     if (prim_item.object.get("mode")) |mode| {
-                        primitive.mode = @as(types.Mode, @enumFromInt(mode.integer));
+                        primitive.mode = @as(Mode, @enumFromInt(mode.integer));
                     }
 
                     if (prim_item.object.get("indices")) |indices| {
@@ -1142,7 +1142,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (accessors.array.items) |item| {
             const object = item.object;
 
-            var accessor = types.Accessor{
+            var accessor = Accessor{
                 .component_type = undefined,
                 .type = undefined,
                 .count = undefined,
@@ -1150,7 +1150,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
             };
 
             if (object.get("componentType")) |component_type| {
-                accessor.component_type = @as(types.ComponentType, @enumFromInt(component_type.integer));
+                accessor.component_type = @as(ComponentType, @enumFromInt(component_type.integer));
             } else {
                 std.debug.panic("Accessor's componentType is missing.", .{});
             }
@@ -1222,7 +1222,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (buffer_views.array.items) |item| {
             const object = item.object;
 
-            var buffer_view = types.BufferView{
+            var buffer_view = BufferView{
                 .buffer = undefined,
                 .byte_length = undefined,
             };
@@ -1244,7 +1244,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
             }
 
             if (object.get("target")) |target| {
-                buffer_view.target = @as(types.Target, @enumFromInt(target.integer));
+                buffer_view.target = @as(Target, @enumFromInt(target.integer));
             }
 
             try self.data.buffer_views.append(buffer_view);
@@ -1255,7 +1255,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (buffers.array.items) |item| {
             const object = item.object;
 
-            var buffer = types.Buffer{
+            var buffer = Buffer{
                 .byte_length = undefined,
             };
 
@@ -1281,7 +1281,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (scenes.array.items, 0..) |item, index| {
             const object = item.object;
 
-            var scene = types.Scene{
+            var scene = Scene{
                 .name = undefined,
             };
 
@@ -1292,7 +1292,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
             }
 
             if (object.get("nodes")) |nodes| {
-                scene.nodes = ArrayList(types.Index).init(alloc);
+                scene.nodes = ArrayList(Index).init(alloc);
 
                 for (nodes.array.items) |node| {
                     try scene.nodes.?.append(parseIndex(node));
@@ -1307,7 +1307,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (materials.array.items, 0..) |item, m_index| {
             const object = item.object;
 
-            var material = types.Material{
+            var material = Material{
                 .name = undefined,
             };
 
@@ -1318,7 +1318,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
             }
 
             if (object.get("pbrMetallicRoughness")) |pbrMetallicRoughness| {
-                var metallic_roughness: types.MetallicRoughness = .{};
+                var metallic_roughness: MetallicRoughness = .{};
                 if (pbrMetallicRoughness.object.get("baseColorFactor")) |color_factor| {
                     for (color_factor.array.items, 0..) |factor, i| {
                         metallic_roughness.base_color_factor[i] = parseFloat(f32, factor);
@@ -1480,7 +1480,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
 
     if (gltf.object.get("textures")) |textures| {
         for (textures.array.items) |item| {
-            var texture = types.Texture{};
+            var texture = Texture{};
 
             if (item.object.get("source")) |source| {
                 texture.source = parseIndex(source);
@@ -1498,9 +1498,9 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
         for (animations.array.items, 0..) |item, index| {
             const object = item.object;
 
-            var animation = types.Animation{
-                .samplers = ArrayList(types.AnimationSampler).init(alloc),
-                .channels = ArrayList(types.Channel).init(alloc),
+            var animation = Animation{
+                .samplers = ArrayList(AnimationSampler).init(alloc),
+                .channels = ArrayList(Channel).init(alloc),
                 .name = undefined,
             };
 
@@ -1512,7 +1512,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
 
             if (object.get("samplers")) |samplers| {
                 for (samplers.array.items) |sampler_item| {
-                    var sampler: types.AnimationSampler = .{
+                    var sampler: AnimationSampler = .{
                         .input = undefined,
                         .output = undefined,
                     };
@@ -1549,7 +1549,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
 
             if (object.get("channels")) |channels| {
                 for (channels.array.items) |channel_item| {
-                    var channel: types.Channel = .{ .sampler = undefined, .target = .{
+                    var channel: Channel = .{ .sampler = undefined, .target = .{
                         .node = undefined,
                         .property = undefined,
                     } };
@@ -1597,22 +1597,22 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
     if (gltf.object.get("samplers")) |samplers| {
         for (samplers.array.items) |item| {
             const object = item.object;
-            var sampler = types.TextureSampler{};
+            var sampler = TextureSampler{};
 
             if (object.get("magFilter")) |mag_filter| {
-                sampler.mag_filter = @as(types.MagFilter, @enumFromInt(mag_filter.integer));
+                sampler.mag_filter = @as(MagFilter, @enumFromInt(mag_filter.integer));
             }
 
             if (object.get("minFilter")) |min_filter| {
-                sampler.min_filter = @as(types.MinFilter, @enumFromInt(min_filter.integer));
+                sampler.min_filter = @as(MinFilter, @enumFromInt(min_filter.integer));
             }
 
             if (object.get("wrapS")) |wrap_s| {
-                sampler.wrap_s = @as(types.WrapMode, @enumFromInt(wrap_s.integer));
+                sampler.wrap_s = @as(WrapMode, @enumFromInt(wrap_s.integer));
             }
 
             if (object.get("wrapt")) |wrap_t| {
-                sampler.wrap_t = @as(types.WrapMode, @enumFromInt(wrap_t.integer));
+                sampler.wrap_t = @as(WrapMode, @enumFromInt(wrap_t.integer));
             }
 
             try self.data.samplers.append(sampler);
@@ -1622,7 +1622,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
     if (gltf.object.get("images")) |images| {
         for (images.array.items) |item| {
             const object = item.object;
-            var image = types.Image{};
+            var image = Image{};
 
             if (object.get("uri")) |uri| {
                 image.uri = try alloc.dupe(u8, uri.string);
@@ -1646,7 +1646,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
                 for (lights.array.items) |item| {
                     const object: json.ObjectMap = item.object;
 
-                    var light = types.Light{
+                    var light = Light{
                         .name = null,
                         .type = undefined,
                         .range = math.inf(f32),
@@ -1668,7 +1668,7 @@ fn parseGltfJson(self: *Self, gltf_json: []const u8) !void {
                     }
 
                     if (object.get("type")) |@"type"| {
-                        if (std.meta.stringToEnum(types.LightType, @"type".string)) |light_type| {
+                        if (std.meta.stringToEnum(LightType, @"type".string)) |light_type| {
                             light.type = light_type;
                         } else std.debug.panic("Light's type invalid", .{});
                     }
@@ -1735,7 +1735,7 @@ fn parseFloat(comptime T: type, component: json.Value) T {
     };
 }
 
-fn fillParents(data: *Data, node: *types.Node, parent_index: types.Index) void {
+fn fillParents(data: *Data, node: *Node, parent_index: Index) void {
     for (node.children.items) |child_index| {
         var child_node = &data.nodes.items[child_index];
         child_node.parent = parent_index;
@@ -1858,7 +1858,7 @@ test "gltf.parse (cameras)" {
     try expectEqual(gltf.data.nodes.items[2].camera, 1);
 
     const camera_0 = gltf.data.cameras.items[0];
-    try expectEqual(camera_0.type.perspective, types.Camera.Perspective{
+    try expectEqual(camera_0.type.perspective, Camera.Perspective{
         .aspect_ratio = 1.0,
         .yfov = 0.7,
         .zfar = 100,
@@ -1866,7 +1866,7 @@ test "gltf.parse (cameras)" {
     });
 
     const camera_1 = gltf.data.cameras.items[1];
-    try expectEqual(camera_1.type.orthographic, types.Camera.Orthographic{
+    try expectEqual(camera_1.type.orthographic, Camera.Orthographic{
         .xmag = 1.0,
         .ymag = 1.0,
         .zfar = 100,
@@ -1953,13 +1953,13 @@ test "gltf.parse (lights)" {
     try expect(std.mem.eql(u8, "Light", gltf.data.lights.items[0].name.?));
     try expectEqual([3]f32 { 1, 1, 1 }, gltf.data.lights.items[0].color);
     try expectEqual(@as(f32, 1000), gltf.data.lights.items[0].intensity);
-    try expectEqual(types.LightType.point, gltf.data.lights.items[0].type);
+    try expectEqual(LightType.point, gltf.data.lights.items[0].type);
 
     try expect(gltf.data.lights.items[1].name != null);
     try expect(std.mem.eql(u8, "Light.001", gltf.data.lights.items[1].name.?));
     try expectEqual([3]f32 { 1, 1, 1 }, gltf.data.lights.items[1].color);
     try expectEqual(@as(f32, 1000), gltf.data.lights.items[1].intensity);
-    try expectEqual(types.LightType.spot, gltf.data.lights.items[1].type);
+    try expectEqual(LightType.spot, gltf.data.lights.items[1].type);
 
     try expect(gltf.data.lights.items[1].spot != null);
     try expectEqual(@as(f32, 0), gltf.data.lights.items[1].spot.?.inner_cone_angle);
@@ -1969,8 +1969,8 @@ test "gltf.parse (lights)" {
     try expect(std.mem.eql(u8, "Light.002", gltf.data.lights.items[2].name.?));
     try expectEqual([3]f32 { 1, 1, 1 }, gltf.data.lights.items[2].color);
     try expectEqual(@as(f32, 1000), gltf.data.lights.items[2].intensity);
-    try expectEqual(types.LightType.directional, gltf.data.lights.items[2].type);
+    try expectEqual(LightType.directional, gltf.data.lights.items[2].type);
 
     try expect(gltf.data.nodes.items[0].light != null);
-    try expectEqual(@as(?types.Index, 0), gltf.data.nodes.items[0].light);
+    try expectEqual(@as(?Index, 0), gltf.data.nodes.items[0].light);
 }

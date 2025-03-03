@@ -105,8 +105,8 @@ fn clear_resources(self: *@This(), device: c.VkDevice) void {
     self.writer.deinit();
 }
 
-fn write_material(self: *@This(), device: c.VkDevice, pass: MaterialPass, resources: MaterialResources, descriptor_allocator: *d.DescriptorAllocatorGrowable) t.MaterialInstance {
-    var matdata = MaterialInstance{};
+fn write_material(self: *@This(), device: c.VkDevice, pass: common.MaterialPass, resources: MaterialResources, descriptor_allocator: *descriptors.AllocatorGrowable) common.MaterialInstance {
+    var matdata = common.MaterialInstance{};
     matdata.passtype = pass;
     if (pass == .Transparent) {
         matdata.pipeline = &self.transparent_pipeline;
@@ -119,7 +119,7 @@ fn write_material(self: *@This(), device: c.VkDevice, pass: MaterialPass, resour
     matdata.materialset = descriptor_allocator.allocate(device, self.materiallayout, null);
 
     self.writer.clear();
-    self.writer.write_buffer(0, resources.databuffer, @sizeOf(MaterialConstants), resources.databuffer_offset, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    self.writer.write_buffer(0, resources.databuffer, @sizeOf(common.MaterialConstants), resources.databuffer_offset, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     self.writer.write_image(1, resources.colorimage.view, resources.colorsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     self.writer.write_image(2, resources.metalroughimage.view, resources.metalroughsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 

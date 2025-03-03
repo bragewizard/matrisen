@@ -1,11 +1,9 @@
 const Core = @import("core.zig");
 const check_vk = @import("debug.zig").check_vk;
-const FrameContext = @import("framecontext.zig");
 const c = @import("../clibs.zig");
 const std = @import("std");
 const log = std.log.scoped(.draw);
-const transition_image = @import("commands.zig").transition_image;
-const copy_image_to_image = @import("commands.zig").copy_image_to_image;
+const commands = @import("commands.zig");
 const SceneDataUniform = @import("pipelines&materials/common.zig").SceneDataUniform;
 const m = @import("../3Dmath.zig");
 
@@ -35,7 +33,7 @@ pub fn draw(core: *Core) void {
 
     check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
 
-    transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
+    commands.transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
     // const clearvalue = c.VkClearColorValue{ .float32 = .{ 0, 0.1, 0.1, 1 } };
     // const clearrange = c.VkImageSubresourceRange{
     //     .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
@@ -85,7 +83,7 @@ pub fn draw(core: *Core) void {
     core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
     c.vkCmdEndRendering(cmd);
 
-    transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_GENERAL, c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    commands.transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_GENERAL, c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     check_vk(c.vkEndCommandBuffer(cmd)) catch @panic("Failed to end command buffer");
 

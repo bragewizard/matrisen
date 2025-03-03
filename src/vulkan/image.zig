@@ -1,7 +1,8 @@
 const c = @import("../clibs.zig");
 const Core = @import("core.zig");
 const check_vk = @import("debug.zig").check_vk;
-const create_buffer = @import("buffer.zig").create_buffer;
+const buffer = @import("buffer.zig");
+const commands = @import("commands.zig");
 const std = @import("std");
 const log = std.log.scoped(.images);
 
@@ -60,47 +61,47 @@ pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, asp
     return image_view;
 }
 
-// fn create_upload(core: *Core, data: *anyopaque, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags, mipmapped: bool) AllocatedImage {
-//     const data_size = size.width * size.height * size.depth * 4;
+fn create_upload(core: *Core, data: *anyopaque, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags, mipmapped: bool) AllocatedImage {
+    const data_size = size.width * size.height * size.depth * 4;
 
-//     const staging = create_buffer(data_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
-//     defer c.vmaDestroyBuffer(core.gpuallocator, staging.buffer, staging.allocation);
+    const staging = buffer.create(data_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    defer c.vmaDestroyBuffer(core.gpuallocator, staging.buffer, staging.allocation);
 
-//     const byte_data = @as([*]u8, @ptrCast(staging.info.pMappedData.?));
-//     const byte_src = @as([*]u8, @ptrCast(data));
-//     @memcpy(byte_data[0..data_size], byte_src[0..data_size]);
+    const byte_data = @as([*]u8, @ptrCast(staging.info.pMappedData.?));
+    const byte_src = @as([*]u8, @ptrCast(data));
+    @memcpy(byte_data[0..data_size], byte_src[0..data_size]);
 
-//     const new_image = create(size, format, usage | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
-//     const submit_ctx = struct {
-//         image: c.VkImage,
-//         size: c.VkExtent3D,
-//         staging_buffer: c.VkBuffer,
-//         fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
-//             transition_image(cmd, sself.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-//             const image_copy_region = std.mem.zeroInit(c.VkBufferImageCopy, .{
-//                 .bufferOffset = 0,
-//                 .bufferRowLength = 0,
-//                 .bufferImageHeight = 0,
-//                 .imageSubresource = .{
-//                     .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
-//                     .mipLevel = 0,
-//                     .baseArrayLayer = 0,
-//                     .layerCount = 1,
-//                 },
-//                 .imageExtent = sself.size,
-//             });
-//             c.vkCmdCopyBufferToImage(cmd, sself.staging_buffer, sself.image, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy_region);
-//             transition_image(cmd, sself.image, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-//         }
-//     }{
-//         .image = new_image.image,
-//         .size = size,
-//         .staging_buffer = staging.buffer,
-//     };
+    const new_image = create(size, format, usage | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
+    const submit_ctx = struct {
+        image: c.VkImage,
+        size: c.VkExtent3D,
+        staging_buffer: c.VkBuffer,
+        fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
+            commands.transition_image(cmd, sself.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            const image_copy_region = std.mem.zeroInit(c.VkBufferImageCopy, .{
+                .bufferOffset = 0,
+                .bufferRowLength = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource = .{
+                    .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+                .imageExtent = sself.size,
+            });
+            c.vkCmdCopyBufferToImage(cmd, sself.staging_buffer, sself.image, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy_region);
+            commands.transition_image(cmd, sself.image, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+    }{
+        .image = new_image.image,
+        .size = size,
+        .staging_buffer = staging.buffer,
+    };
 
-//     self.immediate_submit(submit_ctx);
-//     return new_image;
-// }
+    core.off_framecontext.submit(submit_ctx);
+    return new_image;
+}
 
 pub fn create_draw_and_depth_image(core: *Core) void {
     const extent: c.VkExtent3D = .{

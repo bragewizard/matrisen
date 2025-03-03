@@ -9,12 +9,13 @@ const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
 const Swapchain = @import("swapchain.zig");
-const FrameContext = @import("framecontext.zig");
-const OffFrameContext = @import("off-framecontext.zig");
+const commands = @import("commands.zig");
 const image = @import("image.zig");
 const descriptors = @import("descriptors.zig");
 const init_mesh_pipeline = @import("pipelines&materials/meshpipeline.zig").init_mesh_pipeline;
 const loop = @import("../applications/test.zig").loop;
+const gltf = @import("gltf.zig");
+const data = @import("data.zig");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
 const Self = @This();
@@ -29,19 +30,21 @@ physicaldevice: PhysicalDevice = undefined,
 device: Device = undefined,
 surface: c.VkSurfaceKHR = undefined,
 swapchain: Swapchain = undefined,
-framecontext: FrameContext = .{},
-off_framecontext: OffFrameContext = .{},
+framecontext: commands.FrameContexts = .{},
+off_framecontext: commands.OffFrameContext = .{},
 globaldescriptorallocator: descriptors.Allocator = undefined,
 luastate: ?*c.lua_State = undefined,
+formats: [2]c.VkFormat = undefined,
+extents3d: [1]c.VkExtent3D = undefined,
+extents2d: [1]c.VkExtent2D = undefined,
 pipelines: [2]c.VkPipeline = undefined,
 pipelinelayouts: [2]c.VkPipelineLayout = undefined,
 descriptorsetlayouts: [4]c.VkDescriptorSetLayout = undefined,
 descriptorsets: [1]c.VkDescriptorSet = undefined,
-allocatedimages: [2]image.AllocatedImage = undefined,
+allocatedimages: [6]image.AllocatedImage = undefined,
 imageviews: [2]c.VkImageView = undefined,
-formats: [2]c.VkFormat = undefined,
-extents3d: [1]c.VkExtent3D = undefined,
-extents2d: [1]c.VkExtent2D = undefined,
+samplers: [2]c.VkSampler = undefined,
+meshassets: [1]gltf.MeshAsset = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     var engine = Self{};
@@ -108,6 +111,8 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[1], vkallocationcallbacks);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[2], vkallocationcallbacks);
     defer engine.globaldescriptorallocator.deinit(engine.device.handle);
+
+    data.init_default(&engine);
 
     // TODO fix this ugly ahh pointer thing
     const procAddr: c.PFN_vkCmdDrawMeshTasksEXT = @ptrCast(c.vkGetDeviceProcAddr(engine.device.handle, "vkCmdDrawMeshTasksEXT"));
