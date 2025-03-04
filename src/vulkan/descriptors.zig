@@ -160,6 +160,7 @@ pub const Allocator = struct {
     }
 };
 
+// TODO dont know if i like this writer and its arraylists, need to allocate memory every time
 pub const Writer = struct {
     writes: std.ArrayList(c.VkWriteDescriptorSet) = undefined,
     buffer_infos: std.ArrayList(c.VkDescriptorBufferInfo) = undefined,
@@ -214,14 +215,13 @@ pub const Writer = struct {
     }
 };
 
-pub fn init_descriptors(core: *Core) void {
+pub fn init_global(core: *Core) void {
     var sizes = [_]Allocator.PoolSizeRatio{
         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
     };
 
     core.globaldescriptorallocator.init(core.device.handle, 10, &sizes, core.cpuallocator);
-    // TODO: change to hashmap instead of array, or find a nice way to store
     { // draw image
         var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
         defer builder.deinit();
@@ -248,10 +248,5 @@ pub fn init_descriptors(core: *Core) void {
     defer writer.deinit();
     writer.write_image(0, core.imageviews[0], null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.update_set(core.device.handle, core.descriptorsets[0]);
-
-    for (&core.framecontext.frames) |*frame| {
-        var ratios = [_]Allocator.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
-        frame.descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
-    }
-    log.info("Initialized descriptors", .{});
+    log.info("Initialized global descriptors", .{});
 }

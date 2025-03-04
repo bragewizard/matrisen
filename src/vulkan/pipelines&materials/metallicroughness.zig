@@ -26,12 +26,6 @@ pub const MaterialResources = struct {
     databuffer_offset: u32 = undefined,
 };
 
-writer: descriptors.Writer,
-
-pub fn init(alloc: std.mem.Allocator) @This() {
-    return .{ .writer = descriptors.Writer.init(alloc) };
-}
-
 pub fn build_pipelines(engine: *Core) void {
     const vertex_code align(4) = @embedFile("mesh.vert").*;
     const fragment_code align(4) = @embedFile("mesh.frag").*;
@@ -99,26 +93,4 @@ fn clear_resources(self: *@This(), device: c.VkDevice) void {
     c.vkDestroyPipelineLayout(device, self.transparent_pipeline.layout, null);
     c.vkDestroyPipeline(device, self.transparent_pipeline.pipeline, null);
     c.vkDestroyPipeline(device, self.opaque_pipeline.pipeline, null);
-    self.writer.deinit();
-}
-
-pub fn write_material(self: *@This(), core: *Core, pass: common.MaterialPass, resources: MaterialResources, descriptor_allocator: *descriptors.Allocator) common.MaterialPass {
-    var matdata : common.MaterialPass = undefined;
-    matdata = pass;
-    // if (pass == .Transparent) {
-    //     matdata.pipeline = &core.pipelines[1];
-    // } else {
-    //     matdata.pipeline = &core.pipelines[2];
-    // }
-
-    core.descriptorsets[1] = descriptor_allocator.allocate(core.device.handle, core.descriptorsetlayouts[3], null);
-
-    self.writer.clear();
-    self.writer.write_buffer(0, resources.databuffer, @sizeOf(MaterialConstantsUniform), resources.databuffer_offset, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    self.writer.write_image(1, resources.colorimageview, resources.colorsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    self.writer.write_image(2, resources.metalroughimageview, resources.metalroughsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-    self.writer.update_set(core.device.handle, core.descriptorsets[1]);
-
-    return matdata;
 }

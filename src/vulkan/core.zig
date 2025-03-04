@@ -13,7 +13,7 @@ const buffer = @import("buffer.zig");
 const commands = @import("commands.zig");
 const image = @import("image.zig");
 const descriptors = @import("descriptors.zig");
-const init_mesh_pipeline = @import("pipelines&materials/meshpipeline.zig").init_mesh_pipeline;
+const meshpipeline = @import("pipelines&materials/meshpipeline.zig");
 const metalrough = @import("pipelines&materials/metallicroughness.zig");
 const common = @import("pipelines&materials/common.zig");
 const loop = @import("../applications/test.zig").loop;
@@ -49,7 +49,6 @@ samplers: [2]c.VkSampler = undefined,
 // TODO covert to a more flat layout for meshes as we did with images and views
 allocatedbuffers: [3]buffer.AllocatedBuffer = undefined,
 meshassets: std.ArrayList(buffer.MeshAsset) = undefined,
-metalrough: metalrough = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     var engine = Self{};
@@ -107,18 +106,16 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     engine.off_framecontext.init(&engine);
     defer engine.off_framecontext.deinit(engine.device.handle);
 
-    descriptors.init_descriptors(&engine);
+    descriptors.init_global(&engine);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[0], vkallocationcallbacks);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[1], vkallocationcallbacks);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[2], vkallocationcallbacks);
     defer engine.globaldescriptorallocator.deinit(engine.device.handle);
 
-    engine.init_mesh_pipeline();
-    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
-    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
+    // meshpipeline.build_pipeline(&engine);
+    // defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
+    // defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
 
-    engine.metalrough = metalrough.init(engine.cpuallocator);
-    defer engine.metalrough.writer.deinit();
     metalrough.build_pipelines(&engine);
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[1], vkallocationcallbacks);
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[2], vkallocationcallbacks);

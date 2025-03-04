@@ -12,8 +12,8 @@ const vk_alloc_cbs = @import("core.zig").vkallocationcallbacks;
 const FRAMES = 2;
 
 pub const FrameContexts = struct {
-    frames:[FRAMES]Context = .{Context{}} ** FRAMES,
-    current:u8 = 0,
+    frames: [FRAMES]Context = .{Context{}} ** FRAMES,
+    current: u8 = 0,
 
     pub const Context = struct {
         swapchain_semaphore: c.VkSemaphore = null,
@@ -21,7 +21,7 @@ pub const FrameContexts = struct {
         render_fence: c.VkFence = null,
         command_pool: c.VkCommandPool = null,
         command_buffer: c.VkCommandBuffer = null,
-        descriptors : descriptors.Allocator = .{},
+        descriptors: descriptors.Allocator = .{},
         allocatedbuffers: buffer.AllocatedBuffer = undefined,
 
         pub fn flush(self: *Context, core: *Core) void {
@@ -29,13 +29,12 @@ pub const FrameContexts = struct {
         }
     };
 
-
     pub fn init_frames(self: *FrameContexts, core: *Core) void {
-        const semaphore_ci = c.VkSemaphoreCreateInfo {
+        const semaphore_ci = c.VkSemaphoreCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         };
 
-        const fence_ci = c.VkFenceCreateInfo {
+        const fence_ci = c.VkFenceCreateInfo{
             .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .flags = c.VK_FENCE_CREATE_SIGNALED_BIT,
         };
@@ -48,19 +47,26 @@ pub const FrameContexts = struct {
             debug.check_vk_panic(c.vkCreateSemaphore(core.device.handle, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
             debug.check_vk_panic(c.vkCreateSemaphore(core.device.handle, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
             debug.check_vk_panic(c.vkCreateFence(core.device.handle, &fence_ci, vk_alloc_cbs, &frame.render_fence));
+            var ratios = [_]descriptors.Allocator.PoolSizeRatio{
+                .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
+                .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
+                .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
+                .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
+            };
+            frame.descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
             log.info("Created framecontext", .{});
-        }    
+        }
     }
 
     pub fn deinit(self: *FrameContexts, core: *Core) void {
         for (&self.frames) |*frame| {
-            c.vkDestroyCommandPool(core.device.handle, frame.command_pool , vk_alloc_cbs);
+            c.vkDestroyCommandPool(core.device.handle, frame.command_pool, vk_alloc_cbs);
             c.vkDestroyFence(core.device.handle, frame.render_fence, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
             frame.descriptors.deinit(core.device.handle);
             frame.flush(core);
-        }    
+        }
     }
 
     pub fn switch_frame(self: *FrameContexts) void {
@@ -68,21 +74,19 @@ pub const FrameContexts = struct {
     }
 };
 
-
 pub const OffFrameContext = struct {
     fence: c.VkFence = null,
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
 
-    pub fn init(self : *OffFrameContext, core : *Core) void {
-
-        const command_pool_ci : c.VkCommandPoolCreateInfo = .{
+    pub fn init(self: *OffFrameContext, core: *Core) void {
+        const command_pool_ci: c.VkCommandPoolCreateInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
             .queueFamilyIndex = core.physicaldevice.graphics_queue_family,
         };
-    
-        const upload_fence_ci : c.VkFenceCreateInfo = .{
+
+        const upload_fence_ci: c.VkFenceCreateInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         };
 
@@ -91,7 +95,7 @@ pub const OffFrameContext = struct {
 
         debug.check_vk(c.vkCreateCommandPool(core.device.handle, &command_pool_ci, Core.vkallocationcallbacks, &self.command_pool)) catch @panic("Failed to create upload command pool");
 
-        const upload_command_buffer_ai : c.VkCommandBufferAllocateInfo = .{
+        const upload_command_buffer_ai: c.VkCommandBufferAllocateInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .commandPool = self.command_pool,
             .level = c.VK_COMMAND_BUFFER_LEVEL_PRIMARY,
@@ -101,7 +105,7 @@ pub const OffFrameContext = struct {
     }
 
     pub fn deinit(self: *OffFrameContext, device: c.VkDevice) void {
-        c.vkDestroyCommandPool(device, self.command_pool , Core.vkallocationcallbacks);
+        c.vkDestroyCommandPool(device, self.command_pool, Core.vkallocationcallbacks);
         c.vkDestroyFence(device, self.fence, Core.vkallocationcallbacks);
     }
 
@@ -150,7 +154,7 @@ pub const OffFrameContext = struct {
         debug.check_vk(c.vkResetCommandBuffer(self.command_buffer, 0)) catch @panic("Failed to reset immidiate command buffer");
         const cmd = self.command_buffer;
 
-        const commmand_begin_ci : c.VkCommandBufferBeginInfo = .{
+        const commmand_begin_ci: c.VkCommandBufferBeginInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
             .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         };
@@ -160,11 +164,11 @@ pub const OffFrameContext = struct {
 
         debug.check_vk(c.vkEndCommandBuffer(cmd)) catch @panic("Failed to end command buffer");
 
-        const cmd_info : c.VkCommandBufferSubmitInfo = .{
+        const cmd_info: c.VkCommandBufferSubmitInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
             .commandBuffer = cmd,
         };
-        const submit_info : c.VkSubmitInfo2 = .{
+        const submit_info: c.VkSubmitInfo2 = .{
             .sType = c.VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
             .commandBufferInfoCount = 1,
             .pCommandBufferInfos = &cmd_info,
@@ -176,7 +180,7 @@ pub const OffFrameContext = struct {
 };
 
 pub fn graphics_cmd_pool_info(physical_device: PhysicalDevice) c.VkCommandPoolCreateInfo { // does support compute aswell
-    return c.VkCommandPoolCreateInfo {
+    return c.VkCommandPoolCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = physical_device.graphics_queue_family,
@@ -184,7 +188,7 @@ pub fn graphics_cmd_pool_info(physical_device: PhysicalDevice) c.VkCommandPoolCr
 }
 
 pub fn graphics_cmdbuffer_info(pool: c.VkCommandPool) c.VkCommandBufferAllocateInfo {
-    return c.VkCommandBufferAllocateInfo {
+    return c.VkCommandBufferAllocateInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = pool,
         .level = c.VK_COMMAND_BUFFER_LEVEL_PRIMARY,

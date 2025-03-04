@@ -5,12 +5,13 @@ const m = @import("../3Dmath.zig");
 const debug = @import("debug.zig");
 const image = @import("image.zig");
 const metalrough = @import("pipelines&materials/metallicroughness.zig");
+const descriptors = @import("descriptors.zig");
 const common = @import("pipelines&materials/common.zig");
 const std = @import("std");
 const buffer = @import("buffer.zig");
 
 pub fn init_default(core: *Core) void {
-    core.meshassets = gltf.load_meshes(core, "assets/icosphere.glb") catch @panic("Failed to load mesh");
+    core.meshassets = gltf.load_meshes(core, "assets/suzanne.glb") catch @panic("Failed to load mesh");
     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
     var white: u32 = m.Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
     var grey: u32 = m.Vec4.packU8(.{ .x = 0.3, .y = 0.3, .z = 0.3, .w = 1 });
@@ -55,8 +56,16 @@ pub fn init_default(core: *Core) void {
     sceneuniformdata.metalrough_factors = m.Vec4{ .x = 1, .y = 0.5, .z = 1, .w = 1 };
     materialresources.databuffer = core.allocatedbuffers[0].buffer;
     materialresources.databuffer_offset = 0;
-    core.metalrough = metalrough.init(core.cpuallocator);
-    _ = core.metalrough.write_material(core, common.MaterialPass.MainColor, materialresources, &core.globaldescriptorallocator);
 
+    core.descriptorsets[1] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[3], null);
+    {
+        var writer: descriptors.Writer = descriptors.Writer.init(core.cpuallocator);
+        defer writer.deinit();
+        writer.clear();
+        writer.write_buffer(0, materialresources.databuffer, @sizeOf(metalrough.MaterialConstantsUniform), materialresources.databuffer_offset, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.write_image(1, materialresources.colorimageview, materialresources.colorsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.write_image(2, materialresources.metalroughimageview, materialresources.metalroughsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.update_set(core.device.handle, core.descriptorsets[1]);
+    }
     std.log.info("Initialized default data", .{});
 }

@@ -3,11 +3,12 @@ const create_shader_module = @import("pipelinebuilder.zig").create_shader_module
 const debug = @import("../debug.zig");
 const PipelineBuilder = @import("pipelinebuilder.zig");
 const vk_alloc_cbs = @import("../core.zig").vkallocationcallbacks;
+const common = @import("common.zig");
 const std = @import("std");
 const log = std.log.scoped(.meshshader);
 const c = @import("../../clibs.zig");
 
-pub fn init_mesh_pipeline(core: *Core) void {
+pub fn build_pipeline(core: *Core) void {
     const mesh_code align(4) = @embedFile("simple.mesh").*;
     const fragment_code align(4) = @embedFile("simple.frag").*;
 
@@ -29,6 +30,9 @@ pub fn init_mesh_pipeline(core: *Core) void {
         .module = fragment_module,
         .pName = "main",
     };
+
+    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT };
+    const layouts = [_]c.VkDescriptorSetLayout{ core.descriptorsetlayouts[1], core.descriptorsetlayouts[3] };
 
     const shader_stages: [2]c.VkPipelineShaderStageCreateInfo = .{ stage_mesh, stage_frag };
     const color_format: c.VkFormat = core.formats[1];
@@ -52,12 +56,17 @@ pub fn init_mesh_pipeline(core: *Core) void {
         .scissorCount = 1,
     };
 
-    const pipeline_layout_info: c.VkPipelineLayoutCreateInfo = .{
+    const layout_info = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .flags = 0,
+        .setLayoutCount = 2,
+        .pSetLayouts = &layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &matrixrange,
     };
 
-    var mesh_pipeline_layout: c.VkPipelineLayout = undefined;
-    debug.check_vk(c.vkCreatePipelineLayout(core.device.handle, &pipeline_layout_info, null, &mesh_pipeline_layout)) catch @panic("Failed to create pipeline layout");
+    var pipeline_layout: c.VkPipelineLayout = undefined;
+    debug.check_vk(c.vkCreatePipelineLayout(core.device.handle, &layout_info, null, &pipeline_layout)) catch @panic("Failed to create pipeline layout");
 
     const multisample: c.VkPipelineMultisampleStateCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -97,7 +106,7 @@ pub fn init_mesh_pipeline(core: *Core) void {
         .stageCount = @as(u32, @intCast(shader_stages.len)),
         .pStages = &shader_stages,
         .pRasterizationState = &rasterstate,
-        .layout = mesh_pipeline_layout,
+        .layout = pipeline_layout,
         .pViewportState = &viewport_state,
         .pColorBlendState = &color_blending,
         .pMultisampleState = &multisample,
@@ -115,5 +124,5 @@ pub fn init_mesh_pipeline(core: *Core) void {
     c.vkDestroyShaderModule(core.device.handle, mesh_module, vk_alloc_cbs);
     c.vkDestroyShaderModule(core.device.handle, fragment_module, vk_alloc_cbs);
     core.pipelines[0] = pipeline;
-    core.pipelinelayouts[0] = mesh_pipeline_layout;
+    core.pipelinelayouts[0] = pipeline_layout;
 }

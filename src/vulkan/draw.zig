@@ -18,15 +18,16 @@ pub fn draw(core: *Core) void {
         @panic("Failed to wait for render fence");
     };
 
-    frame.flush(core);
-    frame.descriptors.clear_pools(core.device.handle);
-
     var swapchain_image_index: u32 = undefined;
     var e = c.vkAcquireNextImageKHR(core.device.handle, core.swapchain.handle, timeout, frame.swapchain_semaphore, null, &swapchain_image_index);
     if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
         core.resizerequest = true;
         return;
     }
+
+    frame.flush(core);
+    frame.descriptors.clear_pools(core.device.handle);
+
     check_vk(c.vkResetFences(core.device.handle, 1, &frame.render_fence)) catch @panic("Failed to reset render fence");
     check_vk(c.vkResetCommandBuffer(frame.command_buffer, 0)) catch @panic("Failed to reset command buffer");
 
