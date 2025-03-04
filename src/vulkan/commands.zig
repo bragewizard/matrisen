@@ -114,8 +114,10 @@ pub const OffFrameContext = struct {
             var Context = @TypeOf(submit_ctx);
             var is_ptr = false;
             switch (@typeInfo(Context)) {
-                .Struct, .Union, .Enum => {},
-                .Pointer => |ptr| {
+                .@"struct" => {},
+                .@"union" => {},
+                .@"enum" => {},
+                .pointer => |ptr| {
                     if (ptr.size != .One) {
                         @compileError("Context must be a type with a submit function. " ++ @typeName(Context) ++ "is a multi element pointer");
                     }
@@ -134,19 +136,19 @@ pub const OffFrameContext = struct {
             }
 
             const submit_fn_info = @typeInfo(@TypeOf(Context.submit));
-            if (submit_fn_info != .Fn) {
+            if (submit_fn_info != .@"fn") {
                 @compileError("Context submit method should be a function");
             }
 
-            if (submit_fn_info.Fn.params.len != 2) {
+            if (submit_fn_info.@"fn".params.len != 2) {
                 @compileError("Context submit method should have two parameters");
             }
 
-            if (submit_fn_info.Fn.params[0].type != Context) {
+            if (submit_fn_info.@"fn".params[0].type != Context) {
                 @compileError("Context submit method first parameter should be of type: " ++ @typeName(Context));
             }
 
-            if (submit_fn_info.Fn.params[1].type != c.VkCommandBuffer) {
+            if (submit_fn_info.@"fn".params[1].type != c.VkCommandBuffer) {
                 @compileError("Context submit method second parameter should be of type: " ++ @typeName(c.VkCommandBuffer));
             }
         }

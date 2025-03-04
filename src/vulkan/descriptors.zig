@@ -124,7 +124,7 @@ pub const Allocator = struct {
     fn get_pool(self: *@This(), device: c.VkDevice) c.VkDescriptorPool {
         var new_pool: c.VkDescriptorPool = undefined;
         if (self.ready_pools.items.len != 0) {
-            new_pool = self.ready_pools.pop();
+            new_pool = self.ready_pools.pop().?;
         } else {
             new_pool = create_pool(device, self.sets_per_pool, self.ratios.items, std.heap.page_allocator);
             self.sets_per_pool = @intFromFloat(@as(f32, @floatFromInt(self.sets_per_pool)) * 1.5);

@@ -1708,7 +1708,7 @@ fn parseIndex(component: json.Value) usize {
 
 fn parseFloat(comptime T: type, component: json.Value) T {
     const type_info = @typeInfo(T);
-    if (type_info != .Float) {
+    if (type_info != .float) {
         std.debug.panic(
             "Given type '{any}' is not a floating number.",
             .{type_info},
