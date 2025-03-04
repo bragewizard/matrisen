@@ -2,6 +2,7 @@ const std = @import("std");
 const log = std.log.scoped(.commands);
 const c = @import("../clibs.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
+const buffer = @import("buffer.zig");
 const debug = @import("debug.zig");
 const Core = @import("core.zig");
 const Device = @import("device.zig").Device;
@@ -12,7 +13,7 @@ const FRAMES = 2;
 
 pub const FrameContexts = struct {
     frames:[FRAMES]Context = .{Context{}} ** FRAMES,
-    current:usize = 0,
+    current:u8 = 0,
 
     pub const Context = struct {
         swapchain_semaphore: c.VkSemaphore = null,
@@ -20,11 +21,16 @@ pub const FrameContexts = struct {
         render_fence: c.VkFence = null,
         command_pool: c.VkCommandPool = null,
         command_buffer: c.VkCommandBuffer = null,
-        frame_descriptors : descriptors.Allocator = .{},
+        descriptors : descriptors.Allocator = .{},
+        allocatedbuffers: buffer.AllocatedBuffer = undefined,
+
+        pub fn flush(self: *Context, core: *Core) void {
+            c.vmaDestroyBuffer(core.gpuallocator, self.allocatedbuffers.buffer, self.allocatedbuffers.allocation);
+        }
     };
 
 
-    pub fn init_frames(self: *FrameContexts, physical_device: PhysicalDevice, device: c.VkDevice) void {
+    pub fn init_frames(self: *FrameContexts, core: *Core) void {
         const semaphore_ci = c.VkSemaphoreCreateInfo {
             .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         };
@@ -35,25 +41,25 @@ pub const FrameContexts = struct {
         };
 
         for (&self.frames) |*frame| {
-            const command_pool_info = graphics_cmd_pool_info(physical_device);
-            debug.check_vk_panic(c.vkCreateCommandPool(device, &command_pool_info, vk_alloc_cbs, &frame.command_pool));
+            const command_pool_info = graphics_cmd_pool_info(core.physicaldevice);
+            debug.check_vk_panic(c.vkCreateCommandPool(core.device.handle, &command_pool_info, vk_alloc_cbs, &frame.command_pool));
             const command_buffer_info = graphics_cmdbuffer_info(frame.command_pool);
-            debug.check_vk_panic(c.vkAllocateCommandBuffers(device, &command_buffer_info, &frame.command_buffer));
-            debug.check_vk_panic(c.vkCreateSemaphore(device, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
-            debug.check_vk_panic(c.vkCreateSemaphore(device, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
-            debug.check_vk_panic(c.vkCreateFence(device, &fence_ci, vk_alloc_cbs, &frame.render_fence));
-        
+            debug.check_vk_panic(c.vkAllocateCommandBuffers(core.device.handle, &command_buffer_info, &frame.command_buffer));
+            debug.check_vk_panic(c.vkCreateSemaphore(core.device.handle, &semaphore_ci, vk_alloc_cbs, &frame.swapchain_semaphore));
+            debug.check_vk_panic(c.vkCreateSemaphore(core.device.handle, &semaphore_ci, vk_alloc_cbs, &frame.render_semaphore));
+            debug.check_vk_panic(c.vkCreateFence(core.device.handle, &fence_ci, vk_alloc_cbs, &frame.render_fence));
             log.info("Created framecontext", .{});
         }    
     }
 
-    pub fn deinit(self: *FrameContexts, device: c.VkDevice) void {
+    pub fn deinit(self: *FrameContexts, core: *Core) void {
         for (&self.frames) |*frame| {
-            c.vkDestroyCommandPool(device, frame.command_pool , vk_alloc_cbs);
-            c.vkDestroyFence(device, frame.render_fence, vk_alloc_cbs);
-            c.vkDestroySemaphore(device, frame.render_semaphore, vk_alloc_cbs);
-            c.vkDestroySemaphore(device, frame.swapchain_semaphore, vk_alloc_cbs);
-            frame.frame_descriptors.deinit(device);
+            c.vkDestroyCommandPool(core.device.handle, frame.command_pool , vk_alloc_cbs);
+            c.vkDestroyFence(core.device.handle, frame.render_fence, vk_alloc_cbs);
+            c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
+            c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
+            frame.descriptors.deinit(core.device.handle);
+            frame.flush(core);
         }    
     }
 
@@ -99,7 +105,7 @@ pub const OffFrameContext = struct {
         c.vkDestroyFence(device, self.fence, Core.vkallocationcallbacks);
     }
 
-    pub fn submit(self: *OffFrameContext, submit_ctx: anytype) void {
+    pub fn submit(self: *OffFrameContext, core: *Core, submit_ctx: anytype) void {
         comptime {
             var Context = @TypeOf(submit_ctx);
             var is_ptr = false;
@@ -140,7 +146,7 @@ pub const OffFrameContext = struct {
                 @compileError("Context submit method second parameter should be of type: " ++ @typeName(c.VkCommandBuffer));
             }
         }
-        debug.check_vk(c.vkResetFences(self.device, 1, &self.fence)) catch @panic("Failed to reset immidiate fence");
+        debug.check_vk(c.vkResetFences(core.device.handle, 1, &self.fence)) catch @panic("Failed to reset immidiate fence");
         debug.check_vk(c.vkResetCommandBuffer(self.command_buffer, 0)) catch @panic("Failed to reset immidiate command buffer");
         const cmd = self.command_buffer;
 
@@ -164,8 +170,8 @@ pub const OffFrameContext = struct {
             .pCommandBufferInfos = &cmd_info,
         };
 
-        debug.check_vk(c.vkQueueSubmit2(self.graphics_queue, 1, &submit_info, self.fence)) catch @panic("Failed to submit to graphics queue");
-        debug.check_vk(c.vkWaitForFences(self.device, 1, &self.fence, c.VK_TRUE, 1_000_000_000)) catch @panic("Failed to wait for immidiate fence");
+        debug.check_vk(c.vkQueueSubmit2(core.device.graphics_queue, 1, &submit_info, self.fence)) catch @panic("Failed to submit to graphics queue");
+        debug.check_vk(c.vkWaitForFences(core.device.handle, 1, &self.fence, c.VK_TRUE, 1_000_000_000)) catch @panic("Failed to wait for immidiate fence");
     }
 };
 

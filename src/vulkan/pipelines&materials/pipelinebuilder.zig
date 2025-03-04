@@ -17,7 +17,7 @@ color_attachment_format: c.VkFormat,
 
 pub fn init(alloc: std.mem.Allocator) Self {
     var builder: Self = .{
-        .shader_stages = .init(alloc),
+        .shader_stages = std.ArrayList(c.VkPipelineShaderStageCreateInfo).init(alloc),
         .input_assembly = undefined,
         .rasterizer = undefined,
         .color_blend_attachment = undefined,

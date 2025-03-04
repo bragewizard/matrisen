@@ -9,13 +9,14 @@ const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
 const Swapchain = @import("swapchain.zig");
+const buffer = @import("buffer.zig");
 const commands = @import("commands.zig");
 const image = @import("image.zig");
 const descriptors = @import("descriptors.zig");
 const init_mesh_pipeline = @import("pipelines&materials/meshpipeline.zig").init_mesh_pipeline;
 const metalrough = @import("pipelines&materials/metallicroughness.zig");
+const common = @import("pipelines&materials/common.zig");
 const loop = @import("../applications/test.zig").loop;
-const gltf = @import("gltf.zig");
 const data = @import("data.zig");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
@@ -35,18 +36,20 @@ framecontext: commands.FrameContexts = .{},
 off_framecontext: commands.OffFrameContext = .{},
 globaldescriptorallocator: descriptors.Allocator = undefined,
 luastate: ?*c.lua_State = undefined,
-formats: [2]c.VkFormat = undefined,
+formats: [3]c.VkFormat = undefined,
 extents3d: [1]c.VkExtent3D = undefined,
 extents2d: [1]c.VkExtent2D = undefined,
 pipelines: [3]c.VkPipeline = undefined,
 pipelinelayouts: [3]c.VkPipelineLayout = undefined,
 descriptorsetlayouts: [4]c.VkDescriptorSetLayout = undefined,
-descriptorsets: [1]c.VkDescriptorSet = undefined,
+descriptorsets: [2]c.VkDescriptorSet = undefined,
 allocatedimages: [6]image.AllocatedImage = undefined,
-imageviews: [2]c.VkImageView = undefined,
+imageviews: [3]c.VkImageView = undefined,
 samplers: [2]c.VkSampler = undefined,
-meshassets: std.ArrayList(gltf.MeshAsset) = undefined,
-defaultdata: metalrough = undefined,
+// TODO covert to a more flat layout for meshes as we did with images and views
+allocatedbuffers: [3]buffer.AllocatedBuffer = undefined,
+meshassets: std.ArrayList(buffer.MeshAsset) = undefined,
+metalrough: metalrough = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     var engine = Self{};
@@ -92,24 +95,17 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     debug.check_vk_panic(c.vmaCreateAllocator(&allocator_ci, &engine.gpuallocator));
     defer c.vmaDestroyAllocator(engine.gpuallocator);
 
-    engine.framecontext.init_frames(engine.physicaldevice, engine.device.handle);
-    defer engine.framecontext.deinit(engine.device.handle);
+    image.create_draw_and_depth_image(&engine);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[0].image, engine.allocatedimages[0].allocation);
+    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[0], vkallocationcallbacks);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[1].image, engine.allocatedimages[1].allocation);
+    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[1], vkallocationcallbacks);
+
+    engine.framecontext.init_frames(&engine);
+    defer engine.framecontext.deinit(&engine);
 
     engine.off_framecontext.init(&engine);
     defer engine.off_framecontext.deinit(engine.device.handle);
-
-    engine.defaultdata = metalrough.init(engine.cpuallocator);
-    engine.defaultdata.build_pipelines(&engine);
-
-    engine.init_mesh_pipeline();
-    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
-    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
-
-    image.create_draw_and_depth_image(&engine);
-    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[0].image, engine.allocatedimages[0].allocation );
-    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[0], vkallocationcallbacks);
-    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[1].image, engine.allocatedimages[1].allocation );
-    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[1], vkallocationcallbacks);
 
     descriptors.init_descriptors(&engine);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[0], vkallocationcallbacks);
@@ -117,7 +113,37 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[2], vkallocationcallbacks);
     defer engine.globaldescriptorallocator.deinit(engine.device.handle);
 
+    engine.init_mesh_pipeline();
+    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
+    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
+
+    engine.metalrough = metalrough.init(engine.cpuallocator);
+    defer engine.metalrough.writer.deinit();
+    metalrough.build_pipelines(&engine);
+    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[1], vkallocationcallbacks);
+    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[2], vkallocationcallbacks);
+    defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[3], vkallocationcallbacks);
+    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[1], vkallocationcallbacks);
+
+    engine.meshassets = std.ArrayList(buffer.MeshAsset).init(engine.cpuallocator);
+    defer engine.meshassets.deinit();
+    defer for (engine.meshassets.items) |mesh| {
+        mesh.surfaces.deinit();
+    };
+
     data.init_default(&engine);
+    defer c.vmaDestroyBuffer(engine.gpuallocator, engine.allocatedbuffers[0].buffer, engine.allocatedbuffers[0].allocation);
+    defer for (engine.meshassets.items) |mesh| {
+        c.vmaDestroyBuffer(engine.gpuallocator, mesh.mesh_buffers.vertex_buffer.buffer, mesh.mesh_buffers.vertex_buffer.allocation);
+        c.vmaDestroyBuffer(engine.gpuallocator, mesh.mesh_buffers.index_buffer.buffer, mesh.mesh_buffers.index_buffer.allocation);
+    };
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[2].image, engine.allocatedimages[2].allocation);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[3].image, engine.allocatedimages[3].allocation);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[4].image, engine.allocatedimages[4].allocation);
+    defer c.vmaDestroyImage(engine.gpuallocator, engine.allocatedimages[5].image, engine.allocatedimages[5].allocation);
+    defer c.vkDestroyImageView(engine.device.handle, engine.imageviews[2], vkallocationcallbacks);
+    defer c.vkDestroySampler(engine.device.handle, engine.samplers[0], vkallocationcallbacks);
+    defer c.vkDestroySampler(engine.device.handle, engine.samplers[1], vkallocationcallbacks);
 
     // TODO fix this ugly ahh pointer thing
     const procAddr: c.PFN_vkCmdDrawMeshTasksEXT = @ptrCast(c.vkGetDeviceProcAddr(engine.device.handle, "vkCmdDrawMeshTasksEXT"));

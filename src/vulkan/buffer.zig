@@ -26,6 +26,17 @@ pub const MeshBuffers = struct {
     vertex_buffer_adress: c.VkDeviceAddress,
 };
 
+pub const GeoSurface = struct {
+    start_index: u32,
+    count: u32,
+};
+
+pub const MeshAsset = struct {
+    name: []const u8,
+    surfaces: std.ArrayList(GeoSurface),
+    mesh_buffers: MeshBuffers = undefined,
+};
+
 pub fn create(core: *Core, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage) AllocatedBuffer {
     const buffer_info: c.VkBufferCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -74,7 +85,7 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
         staging_buffer: c.VkBuffer,
         vertex_buffer_size: usize,
         index_buffer_size: usize,
-        fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
+        pub fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
             const vertex_copy_region = std.mem.zeroInit(c.VkBufferCopy, .{
                 .srcOffset = 0,
                 .dstOffset = 0,
@@ -97,6 +108,6 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
         .vertex_buffer_size = vertex_buffer_size,
         .index_buffer_size = index_buffer_size,
     };
-    core.off_framecontext.submit(submit_ctx);
+    core.off_framecontext.submit(core,submit_ctx);
     return new_surface;
 }

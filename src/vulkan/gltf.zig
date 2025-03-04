@@ -16,22 +16,13 @@ const fmt = std.fmt;
 const assert = std.debug.assert;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const MeshBuffers = @import("buffer.zig").MeshBuffers;
+const MeshAsset = @import("buffer.zig").MeshAsset;
+const GeoSurface = @import("buffer.zig").GeoSurface;
 
 const Self = @This();
 arena: *ArenaAllocator,
 data: Data,
 glb_binary: ?[]align(4) const u8 = null,
-
-const GeoSurface = struct {
-    start_index: u32,
-    count: u32,
-};
-
-pub const MeshAsset = struct {
-    name: []const u8,
-    surfaces: std.ArrayList(GeoSurface),
-    mesh_buffers: MeshBuffers = undefined,
-};
 
 pub const Index = usize;
 

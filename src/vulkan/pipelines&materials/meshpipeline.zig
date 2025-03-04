@@ -31,7 +31,7 @@ pub fn init_mesh_pipeline(core: *Core) void {
     };
 
     const shader_stages: [2]c.VkPipelineShaderStageCreateInfo = .{ stage_mesh, stage_frag };
-    const color_format: c.VkFormat = core.formats[0];
+    const color_format: c.VkFormat = core.formats[1];
     const rendering_info: c.VkPipelineRenderingCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = 1,

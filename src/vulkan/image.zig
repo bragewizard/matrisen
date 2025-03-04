@@ -11,9 +11,9 @@ pub const AllocatedImage = struct {
     allocation: c.VmaAllocation,
 };
 
-pub fn create(core: *Core, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags) AllocatedImage {
+pub fn create(core: *Core, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags, mipmapped: bool) AllocatedImage {
     var new_image: AllocatedImage = undefined;
-    const img_info = c.VkImageCreateInfo{
+    var img_info = c.VkImageCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext = null,
         .usage = usage,
@@ -25,6 +25,11 @@ pub fn create(core: *Core, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkIm
         .samples = c.VK_SAMPLE_COUNT_1_BIT,
         .tiling = c.VK_IMAGE_TILING_OPTIMAL,
     };
+
+    if (mipmapped) {
+        const levels = @floor(std.math.log2(@as(f32, @floatFromInt(@max(size.width, size.height)))) + 1);
+        img_info.mipLevels = @intFromFloat(levels);
+    }
 
     const alloc_info = std.mem.zeroInit(c.VmaAllocationCreateInfo, .{
         .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
@@ -39,25 +44,29 @@ pub fn create(core: *Core, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkIm
     return new_image;
 }
 
-pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, aspect_flags: c.VkImageAspectFlags, alloc_cb: ?*c.VkAllocationCallbacks) !c.VkImageView {
+pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, miplevels: u32) c.VkImageView {
+    var image_view: c.VkImageView = undefined;
+
+    var aspect_flags = c.VK_IMAGE_ASPECT_COLOR_BIT;
+    if (format == c.VK_FORMAT_D32_SFLOAT) {
+        aspect_flags = c.VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
     const view_info = c.VkImageViewCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext = null,
-        .image = image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
+        .image = image,
         .format = format,
-        .components = .{ .r = c.VK_COMPONENT_SWIZZLE_IDENTITY, .g = c.VK_COMPONENT_SWIZZLE_IDENTITY, .b = c.VK_COMPONENT_SWIZZLE_IDENTITY, .a = c.VK_COMPONENT_SWIZZLE_IDENTITY },
         .subresourceRange = .{
-            .aspectMask = aspect_flags,
+            .aspectMask = @intCast(aspect_flags),
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = miplevels,
             .baseArrayLayer = 0,
             .layerCount = 1,
         },
     };
 
-    var image_view: c.VkImageView = undefined;
-    try check_vk(c.vkCreateImageView(device, &view_info, alloc_cb, &image_view));
+    check_vk(c.vkCreateImageView(device, &view_info, null, &image_view)) catch @panic("failed to make image view");
     return image_view;
 }
 
@@ -71,12 +80,12 @@ pub fn create_upload(core: *Core, data: *anyopaque, size: c.VkExtent3D, format: 
     const byte_src = @as([*]u8, @ptrCast(data));
     @memcpy(byte_data[0..data_size], byte_src[0..data_size]);
 
-    const new_image = create(size, format, usage | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
+    const new_image = create(core, size, format, usage | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
     const submit_ctx = struct {
         image: c.VkImage,
         size: c.VkExtent3D,
         staging_buffer: c.VkBuffer,
-        fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
+        pub fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
             commands.transition_image(cmd, sself.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             const image_copy_region = std.mem.zeroInit(c.VkBufferImageCopy, .{
                 .bufferOffset = 0,
@@ -99,7 +108,7 @@ pub fn create_upload(core: *Core, data: *anyopaque, size: c.VkExtent3D, format: 
         .staging_buffer = staging.buffer,
     };
 
-    core.off_framecontext.submit(submit_ctx);
+    core.off_framecontext.submit(core, submit_ctx);
     return new_image;
 }
 
@@ -109,8 +118,10 @@ pub fn create_draw_and_depth_image(core: *Core) void {
         .height = core.extents2d[0].height,
         .depth = 1,
     };
+    core.extents3d[0] = extent;
 
     const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
+    core.formats[1] = format;
     const draw_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
@@ -147,7 +158,8 @@ pub fn create_draw_and_depth_image(core: *Core) void {
 
     const depth_extent = extent;
     const depth_format = c.VK_FORMAT_D32_SFLOAT;
-    const depth_image_ci : c.VkImageCreateInfo = .{
+    core.formats[2] = depth_format;
+    const depth_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
         .format = depth_format,

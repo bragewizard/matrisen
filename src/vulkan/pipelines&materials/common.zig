@@ -15,28 +15,17 @@ pub const ModelPushConstants = extern struct {
     vertex_buffer: c.VkDeviceAddress,
 };
 
-pub const RenderObject = struct {
-    indexcount : u32,
-    firstindex : u32,
-    indexbuffer : c.VkBuffer,
-    material : *MaterialInstance,
-    transform : m.Mat4,
-    vertex_buffer_address : c.VkDeviceAddress
-};
-
-pub const MaterialInstance = struct {
-    pipeline : *MaterialPipeline = undefined,
-    materialset : c.VkDescriptorSet = undefined,
-    passtype : MaterialPass = undefined,
-};
-
 pub const MaterialPass = enum {
     MainColor,
     Transparent,
     Other
 };
 
-pub const MaterialPipeline = struct {
-    pipeline : c.VkPipeline,
-    layout : c.VkPipelineLayout  
-};
+// pub const RenderObject = struct {
+//     indexcount : u32,
+//     firstindex : u32,
+//     indexbuffer : c.VkBuffer,
+//     material : *MaterialInstance,
+//     transform : m.Mat4,
+//     vertex_buffer_address : c.VkDeviceAddress
+// };

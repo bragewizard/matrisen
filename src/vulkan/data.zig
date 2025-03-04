@@ -5,6 +5,7 @@ const m = @import("../3Dmath.zig");
 const debug = @import("debug.zig");
 const image = @import("image.zig");
 const metalrough = @import("pipelines&materials/metallicroughness.zig");
+const common = @import("pipelines&materials/common.zig");
 const std = @import("std");
 const buffer = @import("buffer.zig");
 
@@ -19,6 +20,7 @@ pub fn init_default(core: *Core) void {
     core.allocatedimages[2] = image.create_upload(core, &white, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
     core.allocatedimages[3] = image.create_upload(core, &grey, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
     core.allocatedimages[4] = image.create_upload(core, &black, size, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
+    core.imageviews[2] = image.create_view(core.device.handle, core.allocatedimages[3].image, c.VK_FORMAT_R8G8B8A8_UNORM, 1);
 
     var checker = [_]u32{0} ** (16 * 16);
     for (0..16) |x| {
@@ -27,7 +29,6 @@ pub fn init_default(core: *Core) void {
             checker[y * 16 + x] = if (tile == 1) black else magenta;
         }
     }
-
     core.allocatedimages[5] = image.create_upload(core, &checker, .{ .width = 16, .height = 16, .depth = 1 }, c.VK_FORMAT_R8G8B8A8_UNORM, c.VK_IMAGE_USAGE_SAMPLED_BIT, false);
 
     var sampl = c.VkSamplerCreateInfo{
@@ -42,20 +43,22 @@ pub fn init_default(core: *Core) void {
     debug.check_vk(c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[1])) catch @panic("failed to make sampler");
 
     var materialresources = metalrough.MaterialResources{};
-    materialresources.colorimage = core.allocatedimages[2];
-    materialresources.colorsampler = core.samplers[1];
-    materialresources.metalroughimage = core.allocatedimages[2];
-    materialresources.metalroughsampler = core.samplers[1];
+    materialresources.colorimage = core.allocatedimages[3];
+    materialresources.colorimageview = core.imageviews[2];
+    materialresources.colorsampler = core.samplers[0];
+    materialresources.metalroughimage = core.allocatedimages[3];
+    materialresources.metalroughimageview = core.imageviews[2];
+    materialresources.metalroughsampler = core.samplers[0];
 
-    const materialconstants = buffer.create(core, @sizeOf(metalrough.MaterialConstantsUniform), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    core.allocatedbuffers[0] = buffer.create(core, @sizeOf(metalrough.MaterialConstantsUniform), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    var sceneuniformdata = @as(*metalrough.MaterialConstantsUniform, @alignCast(@ptrCast(materialconstants.info.pMappedData.?)));
+    var sceneuniformdata = @as(*metalrough.MaterialConstantsUniform, @alignCast(@ptrCast(core.allocatedbuffers[0].info.pMappedData.?)));
     sceneuniformdata.colorfactors = m.Vec4{ .x = 1, .y = 1, .z = 1, .w = 1 };
-    sceneuniformdata.metalrough_factors = m.Vec4{ .x = 1, .y = 0.5, .z = 1, .w = 1 };
-    materialresources.databuffer = materialconstants.buffer;
+    sceneuniformdata.metalrough_factors = m.Vec4{ .x = 1, .y = 1, .z = 1, .w = 1 };
+    materialresources.databuffer = core.allocatedbuffers[0].buffer;
     materialresources.databuffer_offset = 0;
-    core.defaultdata = metalrough.init(core.cpuallocator);
-    core.defaultdata.write_material(core.device, metalrough.MaterialPass.MainColor, materialresources, &core.globaldescriptorallocator);
+    core.metalrough = metalrough.init(core.cpuallocator);
+    _ = core.metalrough.write_material(core, common.MaterialPass.MainColor, materialresources, &core.globaldescriptorallocator);
 
     std.log.info("Initialized default data", .{});
 }

@@ -251,7 +251,7 @@ pub fn init_descriptors(core: *Core) void {
 
     for (&core.framecontext.frames) |*frame| {
         var ratios = [_]Allocator.PoolSizeRatio{ .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER }, .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER }, .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER } };
-        frame.frame_descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
+        frame.descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
     }
     log.info("Initialized descriptors", .{});
 }
