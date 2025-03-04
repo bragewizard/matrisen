@@ -43,10 +43,8 @@ pub fn init_default(core: *Core) void {
     debug.check_vk(c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[1])) catch @panic("failed to make sampler");
 
     var materialresources = metalrough.MaterialResources{};
-    materialresources.colorimage = core.allocatedimages[3];
     materialresources.colorimageview = core.imageviews[2];
     materialresources.colorsampler = core.samplers[0];
-    materialresources.metalroughimage = core.allocatedimages[3];
     materialresources.metalroughimageview = core.imageviews[2];
     materialresources.metalroughsampler = core.samplers[0];
 
@@ -54,7 +52,7 @@ pub fn init_default(core: *Core) void {
 
     var sceneuniformdata = @as(*metalrough.MaterialConstantsUniform, @alignCast(@ptrCast(core.allocatedbuffers[0].info.pMappedData.?)));
     sceneuniformdata.colorfactors = m.Vec4{ .x = 1, .y = 1, .z = 1, .w = 1 };
-    sceneuniformdata.metalrough_factors = m.Vec4{ .x = 1, .y = 1, .z = 1, .w = 1 };
+    sceneuniformdata.metalrough_factors = m.Vec4{ .x = 1, .y = 0.5, .z = 1, .w = 1 };
     materialresources.databuffer = core.allocatedbuffers[0].buffer;
     materialresources.databuffer_offset = 0;
     core.metalrough = metalrough.init(core.cpuallocator);

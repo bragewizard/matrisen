@@ -223,9 +223,9 @@ pub const Mat4 = extern struct {
         const sqr_norm = axis.squared_norm();
         if (sqr_norm == 0.0) {
             return Mat4.IDENTITY;
-            // } else if (abs(sqr_norm - 1.0) > 0.0001) {
-            // const norm = @sqrt(sqr_norm);
-            // return rotation(axis.div(norm), angle_rad);
+            } else if (@abs(sqr_norm - 1.0) > 0.0001) {
+            const norm = @sqrt(sqr_norm);
+            return rotation(axis.div(norm), angle_rad);
         }
 
         const x = axis.x;

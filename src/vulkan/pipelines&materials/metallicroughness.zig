@@ -18,10 +18,8 @@ pub const MaterialConstantsUniform = extern struct {
 };
 
 pub const MaterialResources = struct {
-    colorimage: image.AllocatedImage = undefined,
     colorimageview: c.VkImageView = undefined,
     colorsampler: c.VkSampler = undefined,
-    metalroughimage: image.AllocatedImage = undefined,
     metalroughimageview: c.VkImageView = undefined,
     metalroughsampler: c.VkSampler = undefined,
     databuffer: c.VkBuffer = undefined,

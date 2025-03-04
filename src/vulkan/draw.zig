@@ -18,7 +18,7 @@ pub fn draw(core: *Core) void {
         @panic("Failed to wait for render fence");
     };
 
-    frame.flush(core);    
+    frame.flush(core);
     frame.descriptors.clear_pools(core.device.handle);
 
     var swapchain_image_index: u32 = undefined;
@@ -43,13 +43,13 @@ pub fn draw(core: *Core) void {
 
     check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
-    // const clearvalue = c.VkClearColorValue{ .float32 = .{ 0, 0.0, 0.0, 1 } };
-    // const clearrange = c.VkImageSubresourceRange{
-    //     .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
-    //     .levelCount = 1,
-    //     .layerCount = 1,
-    // };
-    // c.vkCmdClearColorImage(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
+    const clearvalue = c.VkClearColorValue{ .float32 = .{ 0, 0.0, 0.0, 1 } };
+    const clearrange = c.VkImageSubresourceRange{
+        .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
+        .levelCount = 1,
+        .layerCount = 1,
+    };
+    c.vkCmdClearColorImage(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
 
     // const color_attachment: c.VkRenderingAttachmentInfo = .{
     //     .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -147,14 +147,14 @@ pub fn draw(core: *Core) void {
 }
 
 fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) void {
-    const color_attachment : c.VkRenderingAttachmentInfo = .{
+    const color_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = core.imageviews[0],
         .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
     };
-    const depth_attachment : c.VkRenderingAttachmentInfo = .{
+    const depth_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = core.imageviews[1],
         .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -165,7 +165,7 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
         },
     };
 
-    const render_info : c.VkRenderingInfo = .{
+    const render_info: c.VkRenderingInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = .{
             .offset = .{ .x = 0, .y = 0 },
@@ -176,7 +176,6 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
         .pColorAttachments = &color_attachment,
         .pDepthAttachment = &depth_attachment,
     };
-
 
     const frame_index = core.framecontext.current;
     var frame = &core.framecontext.frames[frame_index];
@@ -189,6 +188,7 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     scene_uniform_data.viewproj = m.Mat4.mul(scene_uniform_data.proj, scene_uniform_data.view);
     scene_uniform_data.sunlight_dir = .{ .x = 0.5, .y = 0.5, .z = 1, .w = 1 };
     scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
+    scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
     const global_descriptor = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[1], null);
     {
@@ -208,16 +208,6 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
         .maxDepth = 1.0,
     });
 
-    // c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.mesh_pipeline);
-    // const image_set = self.get_current_frame().frame_descriptors.allocate(self.device, self.single_image_descriptor_layout, null);
-    // {
-    //     var writer = d.DescriptorWriter.init(self.cpu_allocator);
-    //     defer writer.deinit();
-    //     writer.write_image(0, self.error_checkerboard_image.view, self.default_sampler_nearest, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    //     writer.update_set(self.device, image_set);
-    // }
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.mesh_pipeline_layout, 0, 1, &image_set, 0, null);
-
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[1]);
     c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 0, 1, &global_descriptor, 0, null);
     c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 1, 1, &core.descriptorsets[1], 0, null);
@@ -230,8 +220,10 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     });
 
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, std.math.pi / 2.0);
-    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, std.math.pi);
+    var time: f32 = @floatFromInt(core.framenumber);
+    time /= 100;
+    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
     view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
     var model = view;
     model.i.y *= -1.0;
