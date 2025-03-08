@@ -38,7 +38,7 @@ pub fn draw(core: *Core) void {
     });
 
     var draw_extent: c.VkExtent2D = .{};
-    const render_scale = 0.25;
+    const render_scale = 1.0;
     draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(core.extents2d[0].width, core.extents3d[0].width))) * render_scale);
     draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(core.extents2d[0].height, core.extents3d[0].height))) * render_scale);
 
@@ -52,49 +52,20 @@ pub fn draw(core: *Core) void {
     };
     c.vkCmdClearColorImage(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
 
-    // const color_attachment: c.VkRenderingAttachmentInfo = .{
-    //     .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-    //     .imageView = core.imageviews[0],
-    //     .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
-    //     .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
-    //     .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
-    // };
-
-    // const render_info: c.VkRenderingInfo = .{
-    //     .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
-    //     .renderArea = .{
-    //         .offset = .{ .x = 0, .y = 0 },
-    //         .extent = draw_extent,
-    //     },
-    //     .layerCount = 1,
-    //     .colorAttachmentCount = 1,
-    //     .pColorAttachments = &color_attachment,
-    // };
-
-    // const viewport: c.VkViewport = .{
-    //     .x = 0.0,
-    //     .y = 0.0,
-    //     .width = @as(f32, @floatFromInt(draw_extent.width)),
-    //     .height = @as(f32, @floatFromInt(draw_extent.height)),
-    //     .minDepth = 0.0,
-    //     .maxDepth = 1.0,
-    // };
-
-    // const scissor: c.VkRect2D = .{
-    //     .offset = .{ .x = 0, .y = 0 },
-    //     .extent = draw_extent,
-    // };
-
-    // c.vkCmdBeginRendering(cmd, &render_info);
-    // c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
-    // c.vkCmdSetViewport(cmd, 0, 1, &viewport);
-    // c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    // core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
-    // c.vkCmdEndRendering(cmd);
+    frame.allocatedbuffers = buffer.create(core, @sizeOf(common.SceneDataUniform), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    var scene_uniform_data: *common.SceneDataUniform = @alignCast(@ptrCast(frame.allocatedbuffers.info.pMappedData.?));
+    scene_uniform_data.view = m.Mat4.translation(.{ .x = 0, .y = 0, .z = -5 });
+    scene_uniform_data.proj = m.Mat4.perspective(70.0, @as(f32, @floatFromInt(draw_extent.width)) / @as(f32, @floatFromInt(draw_extent.height)), 1000.0, 1.0);
+    scene_uniform_data.proj.j.y *= -1;
+    scene_uniform_data.viewproj = m.Mat4.mul(scene_uniform_data.proj, scene_uniform_data.view);
+    scene_uniform_data.sunlight_dir = .{ .x = 0.5, .y = 0.5, .z = 1, .w = 1 };
+    scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
+    scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     commands.transition_image(cmd, core.allocatedimages[1].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
     draw_geometry(core, cmd, draw_extent);
+    // draw_mesh(core, cmd, draw_extent);
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     commands.transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     commands.copy_image_to_image(cmd, core.allocatedimages[0].image, core.swapchain.images[swapchain_image_index], draw_extent, core.extents2d[0]);
@@ -151,7 +122,96 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     const color_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = core.imageviews[0],
-        .imageLayout = c.VK_IMAGE_LAYOUT_GENERAL,
+        .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
+    };
+    // const depth_attachment: c.VkRenderingAttachmentInfo = .{
+    //     .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+    //     .imageView = core.imageviews[1],
+    //     .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+    //     .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
+    //     .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
+    //     .clearValue = .{
+    //         .depthStencil = .{ .depth = 0.0, .stencil = 0.0 },
+    //     },
+    // };
+
+    const render_info: c.VkRenderingInfo = .{
+        .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = .{
+            .offset = .{ .x = 0, .y = 0 },
+            .extent = draw_extent,
+        },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_attachment,
+        // .pDepthAttachment = &depth_attachment,
+    };
+
+    const frame_index = core.framecontext.current;
+    var frame = &core.framecontext.frames[frame_index];
+    const global_descriptor = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[1], null);
+    // const global_descriptor2 = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[4], null);
+    {
+        var writer = descriptors.Writer.init(core.cpuallocator);
+        defer writer.deinit();
+        writer.write_buffer(0, frame.allocatedbuffers.buffer, @sizeOf(common.SceneDataUniform), 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.update_set(core.device.handle, global_descriptor);
+        // writer.update_set(core.device.handle, global_descriptor2);
+    }
+
+    const viewport: c.VkViewport = .{
+        .x = 0.0,
+        .y = 0.0,
+        .width = @as(f32, @floatFromInt(draw_extent.width)),
+        .height = @as(f32, @floatFromInt(draw_extent.height)),
+        .minDepth = 0.0,
+        .maxDepth = 1.0,
+    };
+
+    const scissor: c.VkRect2D = .{
+        .offset = .{ .x = 0, .y = 0 },
+        .extent = draw_extent,
+    };
+
+    var time: f32 = @floatFromInt(core.framenumber);
+    time /= 100;
+    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
+    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
+    var model = view;
+    model.i.y *= -1.0;
+    // var push_constants: common.ModelPushConstants = .{
+    //     .model = model,
+    //     .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
+    // };
+
+    c.vkCmdBeginRendering(cmd, &render_info);
+    // c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[1]);
+    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 0, 1, &global_descriptor, 0, null);
+    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 1, 1, &core.descriptorsets[1], 0, null);
+    // c.vkCmdSetViewport(cmd, 0, 1, &viewport);
+    // c.vkCmdSetScissor(cmd, 0, 1, &scissor);
+    // c.vkCmdPushConstants(cmd, core.pipelinelayouts[1], c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
+    // c.vkCmdBindIndexBuffer(cmd, core.meshassets.items[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
+    // const surface = core.meshassets.items[0].surfaces.items[0];
+    // c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
+    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
+    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor2, 0, null);
+    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
+    c.vkCmdSetViewport(cmd, 0, 1, &viewport);
+    c.vkCmdSetScissor(cmd, 0, 1, &scissor);
+    // c.vkCmdPushConstants(cmd, core.pipelinelayouts[0], c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
+    core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
+    c.vkCmdEndRendering(cmd);
+}
+
+fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) void {
+    const color_attachment: c.VkRenderingAttachmentInfo = .{
+        .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = core.imageviews[0],
+        .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
     };
@@ -159,7 +219,7 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = core.imageviews[1],
         .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = .{
             .depthStencil = .{ .depth = 0.0, .stencil = 0.0 },
@@ -180,62 +240,45 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
 
     const frame_index = core.framecontext.current;
     var frame = &core.framecontext.frames[frame_index];
-    frame.allocatedbuffers = buffer.create(core, @sizeOf(common.SceneDataUniform), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    var scene_uniform_data: *common.SceneDataUniform = @alignCast(@ptrCast(frame.allocatedbuffers.info.pMappedData.?));
-    scene_uniform_data.view = m.Mat4.translation(.{ .x = 0, .y = 0, .z = -5 });
-    scene_uniform_data.proj = m.Mat4.perspective(70.0, @as(f32, @floatFromInt(draw_extent.width)) / @as(f32, @floatFromInt(draw_extent.height)), 1000.0, 1.0);
-    scene_uniform_data.proj.j.y *= -1;
-    scene_uniform_data.viewproj = m.Mat4.mul(scene_uniform_data.proj, scene_uniform_data.view);
-    scene_uniform_data.sunlight_dir = .{ .x = 0.5, .y = 0.5, .z = 1, .w = 1 };
-    scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
-    scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
-
-    const global_descriptor = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[1], null);
+    const global_descriptor = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[4], null);
     {
-        var writer = descriptors.Writer.init(core.cpuallocator);
+        var writer: descriptors.Writer = .init(core.cpuallocator);
         defer writer.deinit();
         writer.write_buffer(0, frame.allocatedbuffers.buffer, @sizeOf(common.SceneDataUniform), 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         writer.update_set(core.device.handle, global_descriptor);
     }
 
-    c.vkCmdBeginRendering(cmd, &render_info);
-    const viewport = std.mem.zeroInit(c.VkViewport, .{
+    const viewport: c.VkViewport = .{
         .x = 0.0,
         .y = 0.0,
         .width = @as(f32, @floatFromInt(draw_extent.width)),
         .height = @as(f32, @floatFromInt(draw_extent.height)),
         .minDepth = 0.0,
         .maxDepth = 1.0,
-    });
-
-    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[1]);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 0, 1, &global_descriptor, 0, null);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 1, 1, &core.descriptorsets[1], 0, null);
-
-    c.vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-    const scissor = std.mem.zeroInit(c.VkRect2D, .{
-        .offset = .{ .x = 0, .y = 0 },
-        .extent = draw_extent,
-    });
-
-    c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    var time: f32 = @floatFromInt(core.framenumber);
-    time /= 100;
-    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
-    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
-    var model = view;
-    model.i.y *= -1.0;
-    var push_constants = common.ModelPushConstants{
-        .model = model,
-        .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
     };
 
-    c.vkCmdPushConstants(cmd, core.pipelinelayouts[1], c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
-    c.vkCmdBindIndexBuffer(cmd, core.meshassets.items[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
-    const surface = core.meshassets.items[0].surfaces.items[0];
-    c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
+    const scissor: c.VkRect2D = .{
+        .offset = .{ .x = 0, .y = 0 },
+        .extent = draw_extent,
+    };
+
+    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, 1.0 / 2.0);
+    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, 1.0);
+    view = view.translate(.{ .x = -3.0, .y = 0.0, .z = -5.0 });
+    var model = view;
+    model.i.y *= -1.0;
+    var push_constants: common.ModelPushConstants = .{
+        .model = model,
+        .vertex_buffer = undefined,
+    };
+
+    c.vkCmdBeginRendering(cmd, &render_info);
+    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor, 0, null);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
+    c.vkCmdSetViewport(cmd, 0, 1, &viewport);
+    c.vkCmdSetScissor(cmd, 0, 1, &scissor);
+    c.vkCmdPushConstants(cmd, core.pipelinelayouts[0], c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
+    core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
     c.vkCmdEndRendering(cmd);
 }

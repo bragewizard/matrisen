@@ -9,7 +9,7 @@ pub const LayoutBuilder = struct {
     const Self = @This();
 
     pub fn init(alloc: std.mem.Allocator) Self {
-        return .{ .bindings = std.ArrayList(c.VkDescriptorSetLayoutBinding).init(alloc) };
+        return .{ .bindings = .init(alloc) };
     }
 
     pub fn deinit(self: *Self) void {
@@ -59,10 +59,10 @@ pub const Allocator = struct {
     sets_per_pool: u32 = 0,
 
     pub fn init(self: *@This(), device: c.VkDevice, initial_sets: u32, pool_ratios: []PoolSizeRatio, alloc: std.mem.Allocator) void {
-        self.ratios = std.ArrayList(PoolSizeRatio).init(alloc);
+        self.ratios = .init(alloc);
         self.ratios.clearAndFree();
-        self.ready_pools = std.ArrayList(c.VkDescriptorPool).init(alloc);
-        self.full_pools = std.ArrayList(c.VkDescriptorPool).init(alloc);
+        self.ready_pools = .init(alloc);
+        self.full_pools = .init(alloc);
 
         self.ratios.appendSlice(pool_ratios) catch @panic("Failed to append to ratios");
         const new_pool = create_pool(device, initial_sets, pool_ratios, std.heap.page_allocator);
@@ -136,7 +136,7 @@ pub const Allocator = struct {
     }
 
     fn create_pool(device: c.VkDevice, set_count: u32, pool_ratios: []PoolSizeRatio, alloc: std.mem.Allocator) c.VkDescriptorPool {
-        var pool_sizes = std.ArrayList(c.VkDescriptorPoolSize).init(alloc);
+        var pool_sizes : std.ArrayList(c.VkDescriptorPoolSize) = .init(alloc);
         defer pool_sizes.deinit();
         for (pool_ratios) |ratio| {
             const size = c.VkDescriptorPoolSize{
@@ -168,9 +168,9 @@ pub const Writer = struct {
 
     pub fn init(allocator: std.mem.Allocator) @This() {
         return .{
-            .writes = std.ArrayList(c.VkWriteDescriptorSet).init(allocator),
-            .buffer_infos = std.ArrayList(c.VkDescriptorBufferInfo).init(allocator),
-            .image_infos = std.ArrayList(c.VkDescriptorImageInfo).init(allocator),
+            .writes = .init(allocator),
+            .buffer_infos = .init(allocator),
+            .image_infos = .init(allocator),
         };
     }
 
@@ -223,19 +223,25 @@ pub fn init_global(core: *Core) void {
 
     core.globaldescriptorallocator.init(core.device.handle, 10, &sizes, core.cpuallocator);
     { // draw image
-        var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
+        var builder: LayoutBuilder = .init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
         core.descriptorsetlayouts[0] = builder.build(core.device.handle, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
     }
     { // scenedata uniform
-        var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
+        var builder: LayoutBuilder = .init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         core.descriptorsetlayouts[1] = builder.build(core.device.handle, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
     }
+    { // scenedata uniform for mesh shader
+        var builder: LayoutBuilder = .init(core.cpuallocator);
+        defer builder.deinit();
+        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        core.descriptorsetlayouts[4] = builder.build(core.device.handle, c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    }
     { // image and sampler, used for per frame swaping of images
-        var builder: LayoutBuilder = LayoutBuilder.init(core.cpuallocator);
+        var builder: LayoutBuilder = .init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         core.descriptorsetlayouts[2] = builder.build(core.device.handle, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
@@ -244,7 +250,7 @@ pub fn init_global(core: *Core) void {
     // draw image set here, only used for compute drawing
     core.descriptorsets[0] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[0], null);
 
-    var writer: Writer = Writer.init(core.cpuallocator);
+    var writer: Writer = .init(core.cpuallocator);
     defer writer.deinit();
     writer.write_image(0, core.imageviews[0], null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.update_set(core.device.handle, core.descriptorsets[0]);

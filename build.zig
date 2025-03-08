@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const override_colors = b.option(bool, "override-colors", "Override vertex colors") orelse false;
-    
+
     const options = b.addOptions();
     options.addOption(bool, "override_colors", override_colors);
 
@@ -65,11 +65,15 @@ fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
     var file_it = shaders_dir.iterate();
     while (file_it.next() catch @panic("failed to iterate shader directory")) |entry| {
         if (entry.kind == .file) {
-            const ext = std.fs.path.extension(entry.name);
-            if (!std.mem.eql(u8,ext,".glsl"))  {
+            var numperiod: u8 = 0;
+            for (entry.name) |char| {
+                if (char == '.') {
+                    numperiod += 1;
+                }
+            }
+            if (numperiod > 1) {
                 const basename = std.fs.path.basename(entry.name);
-                // const name = basename[0 .. basename.len - ext.len];
-                // std.debug.print("found shader to compile: {s}\n", .{ entry.name});
+                std.debug.print("found shader to compile: {s}\n", .{basename});
                 add_shader(b, exe, basename);
             }
         }
@@ -79,7 +83,6 @@ fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
 fn add_shader(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) void {
     const source = std.fmt.allocPrint(b.allocator, "src/shaders/{s}", .{name}) catch @panic("OOM");
     const outpath = std.fmt.allocPrint(b.allocator, "src/shaders/{s}.spv", .{name}) catch @panic("OOM");
-
     const shader_compilation = b.addSystemCommand(&.{"glslangValidator"});
     shader_compilation.addArg("--target-env");
     shader_compilation.addArg("vulkan1.3");
@@ -89,6 +92,10 @@ fn add_shader(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) voi
     shader_compilation.addArg("-o");
     const output = shader_compilation.addOutputFileArg(outpath);
     shader_compilation.addFileArg(b.path(source));
-
+    const base = std.fmt.allocPrint(b.allocator, "{s}/", .{b.build_root.path.?}) catch @panic("OOM");
+    const end = std.fmt.allocPrint(b.allocator, "{s}\n", .{source}) catch @panic("OOM");
+    const parts = [_][]const u8{ base, end };
+    const result = std.mem.concat(b.allocator, u8, &parts) catch unreachable;
+    shader_compilation.expectStdOutEqual(result);
     exe.root_module.addAnonymousImport(name, .{ .root_source_file = output });
 }

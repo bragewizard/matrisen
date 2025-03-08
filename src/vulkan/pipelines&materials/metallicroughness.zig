@@ -27,8 +27,8 @@ pub const MaterialResources = struct {
 };
 
 pub fn build_pipelines(engine: *Core) void {
-    const vertex_code align(4) = @embedFile("mesh.vert").*;
-    const fragment_code align(4) = @embedFile("mesh.frag").*;
+    const vertex_code align(4) = @embedFile("mesh.vert.glsl").*;
+    const fragment_code align(4) = @embedFile("mesh.frag.glsl").*;
 
     const vertex_module = create_shader_module(engine.device.handle, &vertex_code, vk_alloc_cbs) orelse null;
     const fragment_module = create_shader_module(engine.device.handle, &fragment_code, vk_alloc_cbs) orelse null;
@@ -74,6 +74,7 @@ pub fn build_pipelines(engine: *Core) void {
     pipelineBuilder.set_multisampling_none();
     pipelineBuilder.disable_blending();
     pipelineBuilder.enable_depthtest(true, c.VK_COMPARE_OP_GREATER_OR_EQUAL);
+    // pipelineBuilder.disable_depthtest();
 
     pipelineBuilder.set_color_attachment_format(engine.formats[1]);
     pipelineBuilder.set_depth_format(engine.formats[2]);

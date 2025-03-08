@@ -208,13 +208,13 @@ pub fn transition_image(cmd: c.VkCommandBuffer, image: c.VkImage, current_layout
     barrier.newLayout = new_layout;
 
     const aspect_mask: u32 = if (new_layout == c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) c.VK_IMAGE_ASPECT_DEPTH_BIT else c.VK_IMAGE_ASPECT_COLOR_BIT;
-    const subresource_range = std.mem.zeroInit(c.VkImageSubresourceRange, .{
+    const subresource_range : c.VkImageSubresourceRange = .{
         .aspectMask = aspect_mask,
         .baseMipLevel = 0,
         .levelCount = c.VK_REMAINING_MIP_LEVELS,
         .baseArrayLayer = 0,
         .layerCount = c.VK_REMAINING_ARRAY_LAYERS,
-    });
+    };
 
     barrier.image = image;
     barrier.subresourceRange = subresource_range;
