@@ -179,7 +179,7 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     time /= 100;
     var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
+    view = view.translate(.{ .x = 2.0, .y = 0.0, .z = -5.0 });
     var model = view;
     model.i.y *= -1.0;
     var push_constants: common.ModelPushConstants = .{
@@ -259,7 +259,7 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
     time /= 100;
     var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
+    view = view.translate(.{ .x = -2.0, .y = 0.0, .z = -5.0 });
     var model = view;
     model.i.y *= -1.0;
     var push_constants: common.ModelPushConstants = .{
@@ -269,8 +269,8 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
 
     c.vkCmdBeginRendering(cmd, &render_info);
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor, 0, null);
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor, 0, null);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
     c.vkCmdSetViewport(cmd, 0, 1, &viewport);
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
     c.vkCmdPushConstants(cmd, core.pipelinelayouts[0], c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(common.ModelPushConstants), &push_constants);

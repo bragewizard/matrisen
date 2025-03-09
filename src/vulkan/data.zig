@@ -58,7 +58,7 @@ pub fn init_default(core: *Core) void {
     materialresources.databuffer_offset = 0;
 
     core.descriptorsets[1] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[3], null);
-    // core.descriptorsets[2] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[5], null);
+    core.descriptorsets[2] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[5], null);
     {
         var writer: descriptors.Writer = .init(core.cpuallocator);
         defer writer.deinit();
@@ -67,7 +67,7 @@ pub fn init_default(core: *Core) void {
         writer.write_image(1, materialresources.colorimageview, materialresources.colorsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.write_image(2, materialresources.metalroughimageview, materialresources.metalroughsampler, c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.update_set(core.device.handle, core.descriptorsets[1]);
-        // writer.update_set(core.device.handle, core.descriptorsets[2]);
+        writer.update_set(core.device.handle, core.descriptorsets[2]);
     }
     std.log.info("Initialized default data", .{});
 }

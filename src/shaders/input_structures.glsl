@@ -1,5 +1,5 @@
 
-layout(set = 0, binding = 0) uniform SceneData{   
+layout(set = 0, binding = 0, std140) uniform SceneData{   
 	mat4 view;
 	mat4 proj;
 	mat4 viewproj;
@@ -8,7 +8,7 @@ layout(set = 0, binding = 0) uniform SceneData{
 	vec4 sunlightColor;
 } sceneData;
 
-layout(set = 1, binding = 0) uniform MaterialData{   
+layout(set = 1, binding = 0, std140) uniform MaterialData{   
 	vec4 colorFactors;
 	vec4 metalRoughFactors;
 	vec4 padding[14];

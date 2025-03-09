@@ -41,7 +41,7 @@ pub fn build_pipeline(core: *Core) void {
     core.descriptorsetlayouts[5] = layout_builder.build(core.device.handle, c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
 
     const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_MESH_BIT_EXT };
-    // const layouts = [_]c.VkDescriptorSetLayout{ core.descriptorsetlayouts[4], core.descriptorsetlayouts[5] };
+    const layouts = [_]c.VkDescriptorSetLayout{ core.descriptorsetlayouts[4], core.descriptorsetlayouts[5] };
 
     const shader_stages: [2]c.VkPipelineShaderStageCreateInfo = .{ stage_mesh, stage_frag };
     const color_format: c.VkFormat = core.formats[1];
@@ -84,8 +84,8 @@ pub fn build_pipeline(core: *Core) void {
     const layout_info = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .flags = 0,
-        // .setLayoutCount = 0,
-        // .pSetLayouts = &layouts,
+        .setLayoutCount = 2,
+        .pSetLayouts = &layouts,
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &matrixrange,
     };

@@ -1,22 +1,24 @@
 #version 460
 
 #extension GL_GOOGLE_include_directive : require
-// #include "input_structures.glsl"
+#extension GL_EXT_mesh_shader : require // If linked to mesh shader pipeline
 
-// layout(location = 0) in vec3 inNormal;
-// layout(location = 1) in vec3 inColor;
-// layout(location = 2) in vec2 inUV;
+#include "input_structures.glsl"
 
+// Input from the mesh shader (matches perVertex output)
+layout (location = 0) in PerVertexData {
+    vec3 normal;
+    vec2 uv;
+} inData;
+
+// Output color
 layout(location = 0) out vec4 outFragColor;
 
 void main()
 {
-    // float lightValue = max(dot(inNormal, sceneData.sunlightDirection.xyz), 0.1f);
-
-    // vec3 color = inColor * texture(colorTex, inUV).xyz;
-    // vec3 ambient = color * sceneData.ambientColor.xyz;
+    // vec3 color = inData.normal * texture(colorTex, inData.uv).xyz;
+    vec3 ambient = sceneData.ambientColor.xyz;
     // vec3 ambient = color;
-
-    // outFragColor = vec4(color * lightValue *  sceneData.sunlightColor.w + ambient ,1.0f);
-    outFragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    outFragColor = vec4(inData.normal + ambient ,1.0f);
+    // outFragColor = vec4(inData.normal, 1.0);
 }
