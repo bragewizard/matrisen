@@ -5,17 +5,17 @@
 
 // #include "input_structures.glsl"
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 3) in;
 layout(triangles, max_vertices = 6, max_primitives = 2) out;
 
 // layout(location = 0) out vec3 outNormal[];
 // layout(location = 1) out vec3 outColor[];
 // layout(location = 2) out vec2 outUV[];
 
-// layout(push_constant) uniform constants {
-//     mat4 render_matrix;
-//     uvec2 padding;
-// } PushConstants;
+layout(push_constant) uniform constants {
+    mat4 render_matrix;
+    uvec2 padding;
+} PushConstants;
 
 void main() {
     // uint vertexID = gl_LocalInvocationIndex;
@@ -34,9 +34,10 @@ void main() {
     // vec4 worldPos = PushConstants.render_matrix * position;
     // gl_MeshVerticesEXT[vertexID].gl_Position = sceneData.viewproj * worldPos;  // Test with identity if needed
     SetMeshOutputsEXT(6, 2);
-    gl_MeshVerticesEXT[0].gl_Position = vec4(-0.5, -0.5, 0.0, 1.0); // Bottom-left
-    gl_MeshVerticesEXT[1].gl_Position = vec4(0.5, -0.5, 0.0, 1.0);  // Bottom-right
-    gl_MeshVerticesEXT[2].gl_Position = vec4(0.0, 0.5, 0.0, 1.0);   // Top-center
+    gl_MeshVerticesEXT[0].gl_Position = vec4(-0.5, -0.5, 0.0, 1.0) * PushConstants.render_matrix; // Bottom-left
+    gl_MeshVerticesEXT[1].gl_Position = vec4(0.5, -0.5, 0.0, 1.0) * PushConstants.render_matrix; // Bottom-right
+    gl_MeshVerticesEXT[2].gl_Position = vec4(0.0, 0.5, 0.0, 1.0) * PushConstants.render_matrix; // Top-center
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
     // gl_MeshVerticesEXT[vertexID].gl_Position = vec4(positions[vertexID], 1.0);  // Uncomment to bypass sceneData
 
     // outNormal[vertexID] = normals[vertexID];

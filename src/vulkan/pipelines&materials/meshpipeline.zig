@@ -32,26 +32,26 @@ pub fn build_pipeline(core: *Core) void {
         .pName = "main",
     };
 
-    // var layout_builder: descriptors.LayoutBuilder = descriptors.LayoutBuilder.init(core.cpuallocator);
-    // defer layout_builder.deinit();
-    // layout_builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    // layout_builder.add_binding(1, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    // layout_builder.add_binding(2, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    var layout_builder: descriptors.LayoutBuilder = descriptors.LayoutBuilder.init(core.cpuallocator);
+    defer layout_builder.deinit();
+    layout_builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    layout_builder.add_binding(1, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    layout_builder.add_binding(2, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    // core.descriptorsetlayouts[5] = layout_builder.build(core.device.handle, c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    core.descriptorsetlayouts[5] = layout_builder.build(core.device.handle, c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
 
-    // const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_MESH_BIT_EXT };
+    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_MESH_BIT_EXT };
     // const layouts = [_]c.VkDescriptorSetLayout{ core.descriptorsetlayouts[4], core.descriptorsetlayouts[5] };
 
     const shader_stages: [2]c.VkPipelineShaderStageCreateInfo = .{ stage_mesh, stage_frag };
     const color_format: c.VkFormat = core.formats[1];
-    // const depth_format: c.VkFormat = core.formats[2];
+    const depth_format: c.VkFormat = core.formats[2];
 
     const rendering_info: c.VkPipelineRenderingCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = 1,
         .pColorAttachmentFormats = &color_format,
-        // .depthAttachmentFormat = depth_format,
+        .depthAttachmentFormat = depth_format,
     };
 
     const rasterstate: c.VkPipelineRasterizationStateCreateInfo = .{
@@ -62,18 +62,18 @@ pub fn build_pipeline(core: *Core) void {
         .lineWidth = 1.0,
     };
 
-    // const depth_stencil : c.VkPipelineDepthStencilStateCreateInfo = .{
-    //     .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-    //     .depthTestEnable = c.VK_TRUE,
-    //     .depthWriteEnable = c.VK_FALSE,
-    //     .depthCompareOp = c.VK_COMPARE_OP_GREATER_OR_EQUAL,
-    //     .depthBoundsTestEnable = c.VK_FALSE,
-    //     .stencilTestEnable = c.VK_FALSE,
-    //     .minDepthBounds = 0.0,
-    //     .maxDepthBounds = 1.0,
-    //     .front = .{},
-    //     .back = .{},
-    // };
+    const depth_stencil : c.VkPipelineDepthStencilStateCreateInfo = .{
+        .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = c.VK_TRUE,
+        .depthWriteEnable = c.VK_FALSE,
+        .depthCompareOp = c.VK_COMPARE_OP_GREATER_OR_EQUAL,
+        .depthBoundsTestEnable = c.VK_FALSE,
+        .stencilTestEnable = c.VK_FALSE,
+        .minDepthBounds = 0.0,
+        .maxDepthBounds = 1.0,
+        .front = .{},
+        .back = .{},
+    };
 
     const viewport_state: c.VkPipelineViewportStateCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -84,10 +84,10 @@ pub fn build_pipeline(core: *Core) void {
     const layout_info = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .flags = 0,
-        .setLayoutCount = 0,
+        // .setLayoutCount = 0,
         // .pSetLayouts = &layouts,
-        .pushConstantRangeCount = 0,
-        // .pPushConstantRanges = &matrixrange,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &matrixrange,
     };
 
     var pipeline_layout: c.VkPipelineLayout = undefined;
@@ -142,7 +142,7 @@ pub fn build_pipeline(core: *Core) void {
         .pViewportState = &viewport_state,
         .pColorBlendState = &color_blending,
         .pMultisampleState = &multisample,
-        // .pDepthStencilState = &depth_stencil,
+        .pDepthStencilState = &depth_stencil,
         // .pInputAssemblyState = &input_assembly,
         // .pVertexInputState = &vertex_input_info,
     };

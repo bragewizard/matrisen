@@ -113,16 +113,16 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[4], vkallocationcallbacks);
     defer engine.globaldescriptorallocator.deinit(engine.device.handle);
 
+    meshpipeline.build_pipeline(&engine);
+    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
+    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
+    defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[5], vkallocationcallbacks);
+
     metalrough.build_pipelines(&engine);
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[1], vkallocationcallbacks);
     defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[2], vkallocationcallbacks);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[3], vkallocationcallbacks);
     defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[1], vkallocationcallbacks);
-
-    meshpipeline.build_pipeline(&engine);
-    defer c.vkDestroyPipeline(engine.device.handle, engine.pipelines[0], vkallocationcallbacks);
-    defer c.vkDestroyPipelineLayout(engine.device.handle, engine.pipelinelayouts[0], vkallocationcallbacks);
-    defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[5], vkallocationcallbacks);
 
     engine.meshassets = .init(engine.cpuallocator);
     defer engine.meshassets.deinit();

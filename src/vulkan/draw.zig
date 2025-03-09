@@ -64,8 +64,8 @@ pub fn draw(core: *Core) void {
 
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     commands.transition_image(cmd, core.allocatedimages[1].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    draw_mesh(core, cmd, draw_extent);
     draw_geometry(core, cmd, draw_extent);
-    // draw_mesh(core, cmd, draw_extent);
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     commands.transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     commands.copy_image_to_image(cmd, core.allocatedimages[0].image, core.swapchain.images[swapchain_image_index], draw_extent, core.extents2d[0]);
@@ -126,16 +126,16 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
     };
-    // const depth_attachment: c.VkRenderingAttachmentInfo = .{
-    //     .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-    //     .imageView = core.imageviews[1],
-    //     .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-    //     .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
-    //     .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
-    //     .clearValue = .{
-    //         .depthStencil = .{ .depth = 0.0, .stencil = 0.0 },
-    //     },
-    // };
+    const depth_attachment: c.VkRenderingAttachmentInfo = .{
+        .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = core.imageviews[1],
+        .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = .{
+            .depthStencil = .{ .depth = 0.0, .stencil = 0.0 },
+        },
+    };
 
     const render_info: c.VkRenderingInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -146,7 +146,7 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_attachment,
-        // .pDepthAttachment = &depth_attachment,
+        .pDepthAttachment = &depth_attachment,
     };
 
     const frame_index = core.framecontext.current;
@@ -182,28 +182,21 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
     var model = view;
     model.i.y *= -1.0;
-    // var push_constants: common.ModelPushConstants = .{
-    //     .model = model,
-    //     .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
-    // };
+    var push_constants: common.ModelPushConstants = .{
+        .model = model,
+        .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
+    };
 
     c.vkCmdBeginRendering(cmd, &render_info);
-    // c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[1]);
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 0, 1, &global_descriptor, 0, null);
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 1, 1, &core.descriptorsets[1], 0, null);
-    // c.vkCmdSetViewport(cmd, 0, 1, &viewport);
-    // c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    // c.vkCmdPushConstants(cmd, core.pipelinelayouts[1], c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
-    // c.vkCmdBindIndexBuffer(cmd, core.meshassets.items[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
-    // const surface = core.meshassets.items[0].surfaces.items[0];
-    // c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
-    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor2, 0, null);
-    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
+    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[1]);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 0, 1, &global_descriptor, 0, null);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 1, 1, &core.descriptorsets[1], 0, null);
     c.vkCmdSetViewport(cmd, 0, 1, &viewport);
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    // c.vkCmdPushConstants(cmd, core.pipelinelayouts[0], c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
-    core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
+    c.vkCmdPushConstants(cmd, core.pipelinelayouts[1], c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
+    c.vkCmdBindIndexBuffer(cmd, core.meshassets.items[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
+    const surface = core.meshassets.items[0].surfaces.items[0];
+    c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
     c.vkCmdEndRendering(cmd);
 }
 
@@ -219,7 +212,7 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = core.imageviews[1],
         .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        .loadOp = c.VK_ATTACHMENT_LOAD_OP_LOAD,
+        .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = .{
             .depthStencil = .{ .depth = 0.0, .stencil = 0.0 },
@@ -262,20 +255,22 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
         .extent = draw_extent,
     };
 
-    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, 1.0 / 2.0);
-    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, 1.0);
-    view = view.translate(.{ .x = -3.0, .y = 0.0, .z = -5.0 });
+    var time: f32 = @floatFromInt(core.framenumber);
+    time /= 100;
+    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
+    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = -5.0 });
     var model = view;
     model.i.y *= -1.0;
     var push_constants: common.ModelPushConstants = .{
         .model = model,
-        .vertex_buffer = undefined,
+        .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
     };
 
     c.vkCmdBeginRendering(cmd, &render_info);
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor, 0, null);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
+    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor, 0, null);
+    // c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
     c.vkCmdSetViewport(cmd, 0, 1, &viewport);
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
     c.vkCmdPushConstants(cmd, core.pipelinelayouts[0], c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
