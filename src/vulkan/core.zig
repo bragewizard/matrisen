@@ -1,13 +1,8 @@
 //! Copyright (C) 2025 B.W. bragewiseth@icloud.com
-//!
-//! This program is free software: you can redistribute it and/or modify it
-//! under the terms of the GNU General Public License as published by the Free
-//! Software Foundation, either version 3 of the License, or (at your option)
-//! any later version.
-//!
-//!
-//! You should have received a copy of the GNU General Public License along with
-//! this program.  If not, see <https://www.gnu.org/licenses/>.
+//! This file is part of MATRISEN.
+//! MATRISEN is free software: you can redistribute it and/or modify it under
+//! the terms of the GNU General Public License (GPL3)
+//! see the LICENSE file or <https://www.gnu.org/licenses/> for more details
 
 const std = @import("std");
 const log = std.log.scoped(.core);

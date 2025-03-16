@@ -5,3 +5,10 @@ is to export useful graphics in useful formats
 for plotting, illustrating and animation tasks
 
 
+```
+.
+├── docs             DOCUMENTATION
+├── src              SOURCE FILES
+├── LICENSE
+└── README.md
+```
