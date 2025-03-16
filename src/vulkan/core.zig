@@ -1,3 +1,14 @@
+//! Copyright (C) 2025 B.W. bragewiseth@icloud.com
+//!
+//! This program is free software: you can redistribute it and/or modify it
+//! under the terms of the GNU General Public License as published by the Free
+//! Software Foundation, either version 3 of the License, or (at your option)
+//! any later version.
+//!
+//!
+//! You should have received a copy of the GNU General Public License along with
+//! this program.  If not, see <https://www.gnu.org/licenses/>.
+
 const std = @import("std");
 const log = std.log.scoped(.core);
 const lua = @import("scripting.zig");
@@ -50,7 +61,7 @@ samplers: [2]c.VkSampler = undefined,
 allocatedbuffers: [3]buffer.AllocatedBuffer = undefined,
 meshassets: std.ArrayList(buffer.MeshAsset) = undefined,
 
-pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
+pub fn run(allocator: std.mem.Allocator, window: *Window) void {
     var engine = Self{};
     engine.extents2d[0] = .{ .width = 0, .height = 0 };
 
@@ -70,13 +81,9 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
         destroy_fn(engine.instance.handle, engine.instance.debug_messenger, vkallocationcallbacks);
     };
 
-    if (window) |w| {
-        w.create_surface(engine.instance.handle, &engine.surface);
-        w.get_size(&engine.extents2d[0].width, &engine.extents2d[0].height);
-    }
-    defer if (window) |_| {
-        c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vkallocationcallbacks);
-    };
+    window.create_surface(engine.instance.handle, &engine.surface);
+    window.get_size(&engine.extents2d[0].width, &engine.extents2d[0].height);
+    defer c.vkDestroySurfaceKHR(engine.instance.handle, engine.surface, vkallocationcallbacks);
 
     engine.physicaldevice = PhysicalDevice.select(initallocatorinstance, engine.instance.handle, engine.surface);
     engine.device = Device.create(initallocatorinstance, engine.physicaldevice);
@@ -154,5 +161,5 @@ pub fn run(allocator: std.mem.Allocator, window: ?*Window) void {
 
     defer debug.check_vk(c.vkDeviceWaitIdle(engine.device.handle)) catch @panic("Failed to wait for device idle");
     initallocator.deinit();
-    loop(&engine, window.?);
+    loop(&engine, window);
 }
