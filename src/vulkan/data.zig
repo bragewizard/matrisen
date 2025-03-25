@@ -71,6 +71,21 @@ pub fn init_default(core: *Core) void {
         .minFilter = c.VK_FILTER_NEAREST,
     };
 
+    // var new_surface: MeshBuffers = undefined;
+    // new_surface.vertex_buffer = create(
+    //     core,
+    //     10, // TODO change this
+    //     c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+    //         c.VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+    //         c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    //     c.VMA_MEMORY_USAGE_GPU_ONLY,
+    // );
+    // const device_address_info: c.VkBufferDeviceAddressInfo = .{
+    //     .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+    //     .buffer = new_surface.vertex_buffer.buffer,
+    // };
+    // new_surface.vertex_buffer_adress = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
+
     debug.check_vk(
         c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[0]),
     ) catch @panic("falied to make sampler");

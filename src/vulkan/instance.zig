@@ -14,9 +14,7 @@ pub fn create(alloc: std.mem.Allocator) Instance {
     var sdl_required_extension_count: u32 = undefined;
     const sdl_extensions = c.SDL_Vulkan_GetInstanceExtensions(&sdl_required_extension_count);
     const sdl_extension_slice = sdl_extensions[0..sdl_required_extension_count];
-    // const application_version = c.VK_MAKE_VERSION(0, 0, 1);
     const engine_name = "matrisen";
-    // const engine_version = c.VK_MAKE_VERSION(0, 0, 1);
     if (api_version > c.VK_MAKE_VERSION(1, 0, 0)) {
         var api_requested = api_version;
         check_vk_panic(c.vkEnumerateInstanceVersion(@ptrCast(&api_requested)));
