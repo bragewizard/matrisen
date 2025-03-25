@@ -55,7 +55,7 @@ pub fn draw(core: *Core) void {
 
     check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
-    const clearvalue = c.VkClearColorValue{ .float32 = .{ 0, 0.0, 0.0, 1 } };
+    const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.02, 0.02, 0.02, 1 } };
     const clearrange = c.VkImageSubresourceRange{
         .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
         .levelCount = 1,
@@ -70,11 +70,12 @@ pub fn draw(core: *Core) void {
         c.VMA_MEMORY_USAGE_CPU_TO_GPU,
     );
     var scene_uniform_data: *common.SceneDataUniform = @alignCast(@ptrCast(frame.allocatedbuffers.info.pMappedData.?));
-    scene_uniform_data.view = Mat4x4.translation(.{ .x = 0, .y = 0, .z = 5 });
+    scene_uniform_data.view = core.camera.toMat4x4();
+    // scene_uniform_data.view = Mat4x4.translation(.{ .x = 0, .y = 0, .z = 7 });
     scene_uniform_data.proj = Mat4x4.perspective(
-        70.0,
+        std.math.degreesToRadians(60.0),
         @as(f32, @floatFromInt(draw_extent.width)) / @as(f32, @floatFromInt(draw_extent.height)),
-        0.5,
+        1.0,
         1000.0,
     );
     // scene_uniform_data.proj.y.y *= -1; // vulkan y up or down?
@@ -236,8 +237,7 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     var view = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
     view = view.translate(.{ .x = 1.0, .y = 0.0, .z = 0.0 });
-    var model = view;
-    model.x.y *= 1.0;
+    const model = view;
     var push_constants: common.ModelPushConstants = .{
         .model = model,
         .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
@@ -342,13 +342,8 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
         .extent = draw_extent,
     };
 
-    var time: f32 = @floatFromInt(core.framenumber);
-    time /= 100;
-    var view = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
-    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = -1.0, .y = 0.0, .z = 0.0 });
-    var model = view;
-    model.x.y *= -1.0;
+    const view = Mat4x4.identity;
+    const model = view;
     var push_constants: common.ModelPushConstants = .{
         .model = model,
         .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,

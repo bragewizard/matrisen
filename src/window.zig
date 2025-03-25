@@ -5,6 +5,7 @@ const vkallocationcallbacks = @import("vulkan/core.zig").vkallocationcallbacks;
 const Self = @This();
 
 sdl_window: *c.SDL_Window,
+state: State = .{},
 
 pub fn init(width: u32, height: u32) Self {
     check_sdl_bool(c.SDL_Init(c.SDL_INIT_VIDEO));
@@ -31,26 +32,65 @@ pub fn get_size(self: *Self, width: *u32, height: *u32) void {
     height.* = @intCast(h);
 }
 
-// pub fn handle_key_up(engine:*e, key_event: c.SDL_KeyboardEvent) void {
-//     switch (key_event.key) {
-//         c.SDLK_UP => {
-//             engine.pc.data1.x += 0.1;
-//         },
-//         c.SDLK_DOWN => {
-//             engine.pc.data1.x -= 0.1;
-//         },
-//         else => {}
-//     }
-// }
+pub const State = packed struct {
+    w: bool = false,
+    s: bool = false,
+    a: bool = false,
+    d: bool = false,
+    q: bool = false,
+    e: bool = false,
+    quit: bool = false,
+    capture_mouse: bool = false,
+    resize_request: bool = false,
+    mouse_x: f32 = 0,
+    mouse_y: f32 = 0,
+};
 
-// pub fn handle_key_down(engine:*e, key_event: c.SDL_KeyboardEvent) void {
-//     switch (key_event.key) {
-//         c.SDLK_UP => {
-//             engine.pc.data1.w += 0.0;
-//         },
-//         else => {}
-//     }
-// }
+pub fn processInput(self: *Self) void {
+    var event: c.SDL_Event = undefined;
+    self.state.mouse_x = 0;
+    self.state.mouse_y = 0;
+    while (c.SDL_PollEvent(&event) == true) {
+        switch (event.type) {
+            c.SDL_EVENT_QUIT => {
+                self.state.quit = true;
+            },
+            c.SDL_EVENT_KEY_DOWN => {
+                switch (event.key.scancode) {
+                    c.SDL_SCANCODE_TAB => {
+                        self.state.capture_mouse = !self.state.capture_mouse;
+                    },
+                    c.SDL_SCANCODE_W => self.state.w = true,
+                    c.SDL_SCANCODE_S => self.state.s = true,
+                    c.SDL_SCANCODE_A => self.state.a = true,
+                    c.SDL_SCANCODE_D => self.state.d = true,
+                    c.SDL_SCANCODE_Q => self.state.q = true,
+                    c.SDL_SCANCODE_E => self.state.e = true,
+                    else => {},
+                }
+            },
+            c.SDL_EVENT_KEY_UP => {
+                switch (event.key.scancode) {
+                    c.SDL_SCANCODE_W => self.state.w = false,
+                    c.SDL_SCANCODE_S => self.state.s = false,
+                    c.SDL_SCANCODE_A => self.state.a = false,
+                    c.SDL_SCANCODE_D => self.state.d = false,
+                    c.SDL_SCANCODE_Q => self.state.q = false,
+                    c.SDL_SCANCODE_E => self.state.e = false,
+                    else => {},
+                }
+            },
+            c.SDL_EVENT_MOUSE_MOTION => {
+                self.state.mouse_x = event.motion.xrel;
+                self.state.mouse_y = event.motion.yrel;
+            },
+            c.SDL_EVENT_WINDOW_RESIZED => {
+                self.state.resize_request = true;
+            },
+            else => {},
+        }
+    }
+}
 
 pub fn check_sdl(res: c_int) void {
     if (res != 0) {

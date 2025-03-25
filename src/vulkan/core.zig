@@ -23,10 +23,12 @@ const metalrough = @import("pipelines/metallicroughness.zig");
 const common = @import("pipelines/common.zig");
 const loop = @import("../gameloop.zig").loop;
 const data = @import("data.zig");
+const linalg = @import("linalg");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
 const Self = @This();
 
+camera: linalg.Transform(f32) = .default,
 vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = undefined,
 resizerequest: bool = false,
 framenumber: u64 = 0,
@@ -58,6 +60,9 @@ pub fn run(allocator: std.mem.Allocator, window: *Window) void {
     var engine = Self{};
     engine.extents2d[0] = .{ .width = 0, .height = 0 };
 
+    
+    engine.camera.position = .{ .x = 0, .y = -5, .z = 1 };
+    engine.camera.rotatePitch(std.math.degreesToRadians(90));
     engine.cpuallocator = allocator;
     var initallocator = std.heap.ArenaAllocator.init(engine.cpuallocator);
     const initallocatorinstance = initallocator.allocator();
