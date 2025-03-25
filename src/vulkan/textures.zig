@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("clibs.zig");
+const c = @import("clibs");
 const Engine = @import("vkEngine_old.zig");
 const check_vk = @import("vkInitUtils.zig").check_vk;
 

@@ -4,10 +4,10 @@ const debug = @import("../debug.zig");
 const PipelineBuilder = @import("pipelinebuilder.zig");
 const vk_alloc_cbs = @import("../core.zig").vkallocationcallbacks;
 const common = @import("common.zig");
-const descriptors = @import("../descriptors.zig");
+const descriptors = @import("../descriptor.zig");
 const std = @import("std");
 const log = std.log.scoped(.meshshader);
-const c = @import("../../clibs.zig");
+const c = @import("clibs");
 
 pub fn build_pipeline(core: *Core) void {
     const mesh_code align(4) = @embedFile("simple.mesh.glsl").*;
@@ -159,3 +159,5 @@ pub fn build_pipeline(core: *Core) void {
     core.pipelines[0] = pipeline;
     core.pipelinelayouts[0] = pipeline_layout;
 }
+
+pub fn writeDescriptors() void {}

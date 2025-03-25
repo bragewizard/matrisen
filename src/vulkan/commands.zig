@@ -1,12 +1,12 @@
 const std = @import("std");
 const log = std.log.scoped(.commands);
-const c = @import("../clibs.zig");
+const c = @import("clibs");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const buffer = @import("buffer.zig");
 const debug = @import("debug.zig");
 const Core = @import("core.zig");
 const Device = @import("device.zig").Device;
-const descriptors = @import("descriptors.zig");
+const descriptors = @import("descriptor.zig");
 const vk_alloc_cbs = @import("core.zig").vkallocationcallbacks;
 
 const FRAMES = 2;
@@ -74,12 +74,12 @@ pub const FrameContexts = struct {
     }
 };
 
-pub const OffFrameContext = struct {
+pub const AsyncContext = struct {
     fence: c.VkFence = null,
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
 
-    pub fn init(self: *OffFrameContext, core: *Core) void {
+    pub fn init(self: *AsyncContext, core: *Core) void {
         const command_pool_ci: c.VkCommandPoolCreateInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -104,12 +104,12 @@ pub const OffFrameContext = struct {
         debug.check_vk(c.vkAllocateCommandBuffers(core.device.handle, &upload_command_buffer_ai, &self.command_buffer)) catch @panic("Failed to allocate upload command buffer");
     }
 
-    pub fn deinit(self: *OffFrameContext, device: c.VkDevice) void {
+    pub fn deinit(self: *AsyncContext, device: c.VkDevice) void {
         c.vkDestroyCommandPool(device, self.command_pool, Core.vkallocationcallbacks);
         c.vkDestroyFence(device, self.fence, Core.vkallocationcallbacks);
     }
 
-    pub fn submit(self: *OffFrameContext, core: *Core, submit_ctx: anytype) void {
+    pub fn submit(self: *AsyncContext, core: *Core, submit_ctx: anytype) void {
         comptime {
             var Context = @TypeOf(submit_ctx);
             var is_ptr = false;

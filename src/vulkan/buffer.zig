@@ -1,6 +1,8 @@
 const std = @import("std");
-const c = @import("../clibs.zig");
-const m = @import("../3Dmath.zig");
+const c = @import("clibs");
+const linalg = @import("linalg");
+const Vec3 = linalg.Vec3(f32);
+const Vec4 = linalg.Vec4(f32);
 const debug = @import("debug.zig");
 const Core = @import("core.zig");
 const commands = @import("commands.zig");
@@ -13,11 +15,11 @@ pub const AllocatedBuffer = struct {
 };
 
 pub const Vertex = extern struct {
-    position: m.Vec3,
+    position: Vec3,
     uv_x: f32,
-    normal: m.Vec3,
+    normal: Vec3,
     uv_y: f32,
-    color: m.Vec4,
+    color: Vec4,
 };
 
 pub const MeshBuffers = struct {
@@ -37,7 +39,7 @@ pub const MeshAsset = struct {
     mesh_buffers: MeshBuffers = undefined,
 };
 
-pub fn create(core: *Core, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage) AllocatedBuffer {
+pub fn create(core: *Core, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage,) AllocatedBuffer {
     const buffer_info: c.VkBufferCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = alloc_size,
@@ -50,7 +52,14 @@ pub fn create(core: *Core, alloc_size: usize, usage: c.VkBufferUsageFlags, memor
     };
 
     var new_buffer: AllocatedBuffer = undefined;
-    debug.check_vk(c.vmaCreateBuffer(core.gpuallocator, &buffer_info, &vma_alloc_info, &new_buffer.buffer, &new_buffer.allocation, &new_buffer.info)) catch @panic("Failed to create buffer");
+    debug.check_vk(c.vmaCreateBuffer(
+        core.gpuallocator,
+        &buffer_info,
+        &vma_alloc_info,
+        &new_buffer.buffer,
+        &new_buffer.allocation,
+        &new_buffer.info,
+    )) catch @panic("Failed to create buffer");
     return new_buffer;
 }
 
@@ -59,19 +68,35 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
     const vertex_buffer_size = @sizeOf(Vertex) * vertices.len;
 
     var new_surface: MeshBuffers = undefined;
-    new_surface.vertex_buffer = create(core, vertex_buffer_size, c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-        c.VK_BUFFER_USAGE_TRANSFER_DST_BIT | c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+    new_surface.vertex_buffer = create(
+        core,
+        vertex_buffer_size,
+        c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            c.VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+            c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        c.VMA_MEMORY_USAGE_GPU_ONLY,
+    );
 
-    const device_address_info : c.VkBufferDeviceAddressInfo = .{
+    const device_address_info: c.VkBufferDeviceAddressInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
         .buffer = new_surface.vertex_buffer.buffer,
     };
 
     new_surface.vertex_buffer_adress = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
-    new_surface.index_buffer = create(core, index_buffer_size, c.VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-        c.VK_BUFFER_USAGE_TRANSFER_DST_BIT, c.VMA_MEMORY_USAGE_GPU_ONLY);
+    new_surface.index_buffer = create(
+        core,
+        index_buffer_size,
+        c.VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+            c.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        c.VMA_MEMORY_USAGE_GPU_ONLY,
+    );
 
-    const staging = create(core, index_buffer_size + vertex_buffer_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_ONLY);
+    const staging = create(
+        core,
+        index_buffer_size + vertex_buffer_size,
+        c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        c.VMA_MEMORY_USAGE_CPU_ONLY,
+    );
     defer c.vmaDestroyBuffer(core.gpuallocator, staging.buffer, staging.allocation);
 
     const data: *anyopaque = staging.info.pMappedData.?;
@@ -108,6 +133,6 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
         .vertex_buffer_size = vertex_buffer_size,
         .index_buffer_size = index_buffer_size,
     };
-    core.off_framecontext.submit(core,submit_ctx);
+    core.asynccontext.submit(core, submit_ctx);
     return new_surface;
 }

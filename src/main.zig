@@ -1,6 +1,6 @@
 const std = @import("std");
 const graphics = @import("vulkan/core.zig");
-const c = @import("clibs.zig");
+const c = @import("clibs");
 const Window = @import("window.zig");
 
 pub fn main() !void {

@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("../../clibs.zig");
+const c = @import("clibs");
 const check_vk = @import("../debug.zig").check_vk;
 const Core = @import("../core.zig");
 const log = std.log.scoped(.pipelines);

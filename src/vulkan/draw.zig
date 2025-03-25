@@ -1,13 +1,13 @@
 const Core = @import("core.zig");
 const check_vk = @import("debug.zig").check_vk;
-const c = @import("../clibs.zig");
+const c = @import("clibs");
 const std = @import("std");
 const log = std.log.scoped(.draw);
 const commands = @import("commands.zig");
-const common = @import("pipelines&materials/common.zig");
+const common = @import("pipelines/common.zig");
 const buffer = @import("buffer.zig");
-const descriptors = @import("descriptors.zig");
-const m = @import("../3Dmath.zig");
+const descriptors = @import("descriptor.zig");
+const Mat4x4 = @import("linalg").Mat4x4(f32);
 
 pub fn draw(core: *Core) void {
     const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
@@ -19,7 +19,14 @@ pub fn draw(core: *Core) void {
     };
 
     var swapchain_image_index: u32 = undefined;
-    var e = c.vkAcquireNextImageKHR(core.device.handle, core.swapchain.handle, timeout, frame.swapchain_semaphore, null, &swapchain_image_index);
+    var e = c.vkAcquireNextImageKHR(
+        core.device.handle,
+        core.swapchain.handle,
+        timeout,
+        frame.swapchain_semaphore,
+        null,
+        &swapchain_image_index,
+    );
     if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
         core.resizerequest = true;
         return;
@@ -39,8 +46,12 @@ pub fn draw(core: *Core) void {
 
     var draw_extent: c.VkExtent2D = .{};
     const render_scale = 1.0;
-    draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(core.extents2d[0].width, core.extents3d[0].width))) * render_scale);
-    draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(core.extents2d[0].height, core.extents3d[0].height))) * render_scale);
+    draw_extent.width = @intFromFloat(
+        @as(f32, @floatFromInt(@min(core.extents2d[0].width, core.extents3d[0].width))) * render_scale,
+    );
+    draw_extent.height = @intFromFloat(
+        @as(f32, @floatFromInt(@min(core.extents2d[0].height, core.extents3d[0].height))) * render_scale,
+    );
 
     check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
     commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
@@ -52,24 +63,65 @@ pub fn draw(core: *Core) void {
     };
     c.vkCmdClearColorImage(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
 
-    frame.allocatedbuffers = buffer.create(core, @sizeOf(common.SceneDataUniform), c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    frame.allocatedbuffers = buffer.create(
+        core,
+        @sizeOf(common.SceneDataUniform),
+        c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+    );
     var scene_uniform_data: *common.SceneDataUniform = @alignCast(@ptrCast(frame.allocatedbuffers.info.pMappedData.?));
-    scene_uniform_data.view = m.Mat4.translation(.{ .x = 0, .y = 0, .z = -5 });
-    scene_uniform_data.proj = m.Mat4.perspective(70.0, @as(f32, @floatFromInt(draw_extent.width)) / @as(f32, @floatFromInt(draw_extent.height)), 1000.0, 1.0);
-    scene_uniform_data.proj.j.y *= -1;
-    scene_uniform_data.viewproj = m.Mat4.mul(scene_uniform_data.proj, scene_uniform_data.view);
+    scene_uniform_data.view = Mat4x4.translation(.{ .x = 0, .y = 0, .z = 5 });
+    scene_uniform_data.proj = Mat4x4.perspective(
+        70.0,
+        @as(f32, @floatFromInt(draw_extent.width)) / @as(f32, @floatFromInt(draw_extent.height)),
+        0.5,
+        1000.0,
+    );
+    // scene_uniform_data.proj.y.y *= -1; // vulkan y up or down?
+    scene_uniform_data.viewproj = Mat4x4.mul(scene_uniform_data.proj, scene_uniform_data.view);
     scene_uniform_data.sunlight_dir = .{ .x = 0.5, .y = 0.5, .z = 1, .w = 1 };
     scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
     scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
-    commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    commands.transition_image(cmd, core.allocatedimages[1].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    commands.transition_image(
+        cmd,
+        core.allocatedimages[0].image,
+        c.VK_IMAGE_LAYOUT_GENERAL,
+        c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    );
+    commands.transition_image(
+        cmd,
+        core.allocatedimages[1].image,
+        c.VK_IMAGE_LAYOUT_UNDEFINED,
+        c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+    );
     draw_mesh(core, cmd, draw_extent);
     draw_geometry(core, cmd, draw_extent);
-    commands.transition_image(cmd, core.allocatedimages[0].image, c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    commands.transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    commands.copy_image_to_image(cmd, core.allocatedimages[0].image, core.swapchain.images[swapchain_image_index], draw_extent, core.extents2d[0]);
-    commands.transition_image(cmd, core.swapchain.images[swapchain_image_index], c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    commands.transition_image(
+        cmd,
+        core.allocatedimages[0].image,
+        c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    );
+    commands.transition_image(
+        cmd,
+        core.swapchain.images[swapchain_image_index],
+        c.VK_IMAGE_LAYOUT_UNDEFINED,
+        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    );
+    commands.copy_image_to_image(
+        cmd,
+        core.allocatedimages[0].image,
+        core.swapchain.images[swapchain_image_index],
+        draw_extent,
+        core.extents2d[0],
+    );
+    commands.transition_image(
+        cmd,
+        core.swapchain.images[swapchain_image_index],
+        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    );
 
     check_vk(c.vkEndCommandBuffer(cmd)) catch @panic("Failed to end command buffer");
 
@@ -152,13 +204,17 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
     const frame_index = core.framecontext.current;
     var frame = &core.framecontext.frames[frame_index];
     const global_descriptor = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[1], null);
-    // const global_descriptor2 = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[4], null);
     {
         var writer = descriptors.Writer.init(core.cpuallocator);
         defer writer.deinit();
-        writer.write_buffer(0, frame.allocatedbuffers.buffer, @sizeOf(common.SceneDataUniform), 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.write_buffer(
+            0,
+            frame.allocatedbuffers.buffer,
+            @sizeOf(common.SceneDataUniform),
+            0,
+            c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        );
         writer.update_set(core.device.handle, global_descriptor);
-        // writer.update_set(core.device.handle, global_descriptor2);
     }
 
     const viewport: c.VkViewport = .{
@@ -177,11 +233,11 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
 
     var time: f32 = @floatFromInt(core.framenumber);
     time /= 100;
-    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+    var view = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = 2.0, .y = 0.0, .z = -5.0 });
+    view = view.translate(.{ .x = 1.0, .y = 0.0, .z = 0.0 });
     var model = view;
-    model.i.y *= -1.0;
+    model.x.y *= 1.0;
     var push_constants: common.ModelPushConstants = .{
         .model = model,
         .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
@@ -189,11 +245,36 @@ fn draw_geometry(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D)
 
     c.vkCmdBeginRendering(cmd, &render_info);
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[1]);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 0, 1, &global_descriptor, 0, null);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[1], 1, 1, &core.descriptorsets[1], 0, null);
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        core.pipelinelayouts[1],
+        0,
+        1,
+        &global_descriptor,
+        0,
+        null,
+    );
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        core.pipelinelayouts[1],
+        1,
+        1,
+        &core.descriptorsets[1],
+        0,
+        null,
+    );
     c.vkCmdSetViewport(cmd, 0, 1, &viewport);
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    c.vkCmdPushConstants(cmd, core.pipelinelayouts[1], c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
+    c.vkCmdPushConstants(
+        cmd,
+        core.pipelinelayouts[1],
+        c.VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        @sizeOf(common.ModelPushConstants),
+        &push_constants,
+    );
     c.vkCmdBindIndexBuffer(cmd, core.meshassets.items[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
     const surface = core.meshassets.items[0].surfaces.items[0];
     c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
@@ -237,7 +318,13 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
     {
         var writer: descriptors.Writer = .init(core.cpuallocator);
         defer writer.deinit();
-        writer.write_buffer(0, frame.allocatedbuffers.buffer, @sizeOf(common.SceneDataUniform), 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.write_buffer(
+            0,
+            frame.allocatedbuffers.buffer,
+            @sizeOf(common.SceneDataUniform),
+            0,
+            c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        );
         writer.update_set(core.device.handle, global_descriptor);
     }
 
@@ -257,11 +344,11 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
 
     var time: f32 = @floatFromInt(core.framenumber);
     time /= 100;
-    var view = m.Mat4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+    var view = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = -2.0, .y = 0.0, .z = -5.0 });
+    view = view.translate(.{ .x = -1.0, .y = 0.0, .z = 0.0 });
     var model = view;
-    model.i.y *= -1.0;
+    model.x.y *= -1.0;
     var push_constants: common.ModelPushConstants = .{
         .model = model,
         .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
@@ -269,11 +356,36 @@ fn draw_mesh(core: *Core, cmd: c.VkCommandBuffer, draw_extent: c.VkExtent2D) voi
 
     c.vkCmdBeginRendering(cmd, &render_info);
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 0, 1, &global_descriptor, 0, null);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelinelayouts[0], 1, 1, &core.descriptorsets[2], 0, null);
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        core.pipelinelayouts[0],
+        0,
+        1,
+        &global_descriptor,
+        0,
+        null,
+    );
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        core.pipelinelayouts[0],
+        1,
+        1,
+        &core.descriptorsets[2],
+        0,
+        null,
+    );
     c.vkCmdSetViewport(cmd, 0, 1, &viewport);
     c.vkCmdSetScissor(cmd, 0, 1, &scissor);
-    c.vkCmdPushConstants(cmd, core.pipelinelayouts[0], c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(common.ModelPushConstants), &push_constants);
+    c.vkCmdPushConstants(
+        cmd,
+        core.pipelinelayouts[0],
+        c.VK_SHADER_STAGE_MESH_BIT_EXT,
+        0,
+        @sizeOf(common.ModelPushConstants),
+        &push_constants,
+    );
     core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
     c.vkCmdEndRendering(cmd);
 }

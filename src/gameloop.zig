@@ -1,8 +1,8 @@
-const draw = @import("../vulkan/draw.zig").draw;
+const draw = @import("vulkan/draw.zig").draw;
 const std = @import("std");
-const c = @import("../clibs.zig");
-const Core = @import("../vulkan/core.zig");
-const Window = @import("../window.zig");
+const c = @import("clibs");
+const Core = @import("vulkan/core.zig");
+const Window = @import("window.zig");
 const log = std.log.scoped(.app);
 
 

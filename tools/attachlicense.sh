@@ -1,4 +1,5 @@
-
+# This script attaches license clause at the top of every source
+# file if there is none
 
 //! Copyright (C) 2025 B.W. bragewiseth@icloud.com
 //! This file is part of MATRISEN.

@@ -1,8 +1,8 @@
 const std = @import("std");
-const c = @import("../clibs.zig");
+const c = @import("clibs");
 const check_vk = @import("debug.zig").check_vk;
 const Core = @import("core.zig");
-const log = std.log.scoped(.descriptors);
+const log = std.log.scoped(.descriptor);
 
 pub const LayoutBuilder = struct {
     bindings: std.ArrayList(c.VkDescriptorSetLayoutBinding) = undefined,
@@ -29,7 +29,13 @@ pub const LayoutBuilder = struct {
         self.bindings.clearAndFree();
     }
 
-    pub fn build(self: *Self, device: c.VkDevice, shader_stages: c.VkShaderStageFlags, pnext: ?*anyopaque, flags: c.VkDescriptorSetLayoutCreateFlags) c.VkDescriptorSetLayout {
+    pub fn build(
+        self: *Self,
+        device: c.VkDevice,
+        shader_stages: c.VkShaderStageFlags,
+        pnext: ?*anyopaque,
+        flags: c.VkDescriptorSetLayoutCreateFlags,
+    ) c.VkDescriptorSetLayout {
         for (self.bindings.items) |*binding| {
             binding.stageFlags |= shader_stages;
         }
@@ -42,7 +48,9 @@ pub const LayoutBuilder = struct {
             .pNext = pnext,
         };
         var layout: c.VkDescriptorSetLayout = undefined;
-        check_vk(c.vkCreateDescriptorSetLayout(device, &info, null, &layout)) catch @panic("Failed to create descriptor set layout");
+        check_vk(c.vkCreateDescriptorSetLayout(device, &info, null, &layout)) catch {
+            @panic("Failed to create descriptor set layout");
+        };
         return layout;
     }
 };
@@ -58,7 +66,13 @@ pub const Allocator = struct {
     ratios: std.ArrayList(PoolSizeRatio) = undefined,
     sets_per_pool: u32 = 0,
 
-    pub fn init(self: *@This(), device: c.VkDevice, initial_sets: u32, pool_ratios: []PoolSizeRatio, alloc: std.mem.Allocator) void {
+    pub fn init(
+        self: *@This(),
+        device: c.VkDevice,
+        initial_sets: u32,
+        pool_ratios: []PoolSizeRatio,
+        alloc: std.mem.Allocator,
+    ) void {
         self.ratios = .init(alloc);
         self.ratios.clearAndFree();
         self.ready_pools = .init(alloc);
@@ -115,7 +129,9 @@ pub const Allocator = struct {
             self.full_pools.append(pool_to_use) catch @panic("Failed to append to full_pools");
             pool_to_use = self.get_pool(device);
             info.descriptorPool = pool_to_use;
-            check_vk(c.vkAllocateDescriptorSets(device, &info, &descriptor_set)) catch @panic("Failed to allocate descriptor set");
+            check_vk(c.vkAllocateDescriptorSets(device, &info, &descriptor_set)) catch {
+                @panic("Failed to allocate descriptor set");
+            };
         }
         self.ready_pools.append(pool_to_use) catch @panic("Failed to append to full_pools");
         return descriptor_set;
@@ -135,8 +151,13 @@ pub const Allocator = struct {
         return new_pool;
     }
 
-    fn create_pool(device: c.VkDevice, set_count: u32, pool_ratios: []PoolSizeRatio, alloc: std.mem.Allocator) c.VkDescriptorPool {
-        var pool_sizes : std.ArrayList(c.VkDescriptorPoolSize) = .init(alloc);
+    fn create_pool(
+        device: c.VkDevice,
+        set_count: u32,
+        pool_ratios: []PoolSizeRatio,
+        alloc: std.mem.Allocator,
+    ) c.VkDescriptorPool {
+        var pool_sizes: std.ArrayList(c.VkDescriptorPoolSize) = .init(alloc);
         defer pool_sizes.deinit();
         for (pool_ratios) |ratio| {
             const size = c.VkDescriptorPoolSize{
@@ -180,24 +201,52 @@ pub const Writer = struct {
         self.image_infos.deinit();
     }
 
-    pub fn write_buffer(self: *@This(), binding: u32, buffer: c.VkBuffer, size: usize, offset: usize, ty: c.VkDescriptorType) void {
+    pub fn write_buffer(
+        self: *@This(),
+        binding: u32,
+        buffer: c.VkBuffer,
+        size: usize,
+        offset: usize,
+        ty: c.VkDescriptorType,
+    ) void {
         const info_container = struct {
             var info: c.VkDescriptorBufferInfo = c.VkDescriptorBufferInfo{};
         };
         info_container.info = c.VkDescriptorBufferInfo{ .buffer = buffer, .offset = offset, .range = size };
         self.buffer_infos.append(info_container.info) catch @panic("failed to append");
-        const write = c.VkWriteDescriptorSet{ .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = binding, .dstSet = null, .descriptorCount = 1, .descriptorType = ty, .pBufferInfo = &info_container.info };
+        const write = c.VkWriteDescriptorSet{
+            .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .dstSet = null,
+            .descriptorCount = 1,
+            .descriptorType = ty,
+            .pBufferInfo = &info_container.info,
+        };
         self.writes.append(write) catch @panic("failed to append");
     }
 
-    pub fn write_image(self: *@This(), binding: u32, image: c.VkImageView, sampler: c.VkSampler, layout: c.VkImageLayout, ty: c.VkDescriptorType) void {
+    pub fn write_image(
+        self: *@This(),
+        binding: u32,
+        image: c.VkImageView,
+        sampler: c.VkSampler,
+        layout: c.VkImageLayout,
+        ty: c.VkDescriptorType,
+    ) void {
         const info_container = struct {
             var info: c.VkDescriptorImageInfo = c.VkDescriptorImageInfo{};
         };
         info_container.info = c.VkDescriptorImageInfo{ .sampler = sampler, .imageView = image, .imageLayout = layout };
 
         self.image_infos.append(info_container.info) catch @panic("append failed");
-        const write = c.VkWriteDescriptorSet{ .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = binding, .dstSet = null, .descriptorCount = 1, .descriptorType = ty, .pImageInfo = &info_container.info };
+        const write = c.VkWriteDescriptorSet{
+            .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .dstSet = null,
+            .descriptorCount = 1,
+            .descriptorType = ty,
+            .pImageInfo = &info_container.info,
+        };
         self.writes.append(write) catch @panic("append failed");
     }
 
@@ -215,6 +264,8 @@ pub const Writer = struct {
     }
 };
 
+// TODO remove this and move the descriptorlayout creation to their respective location
+// -> materials/ or -> core
 pub fn init_global(core: *Core) void {
     var sizes = [_]Allocator.PoolSizeRatio{
         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
@@ -232,13 +283,23 @@ pub fn init_global(core: *Core) void {
         var builder: LayoutBuilder = .init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        core.descriptorsetlayouts[1] = builder.build(core.device.handle, c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+        core.descriptorsetlayouts[1] = builder.build(
+            core.device.handle,
+            c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            null,
+            0,
+        );
     }
     { // scenedata uniform for mesh shader
         var builder: LayoutBuilder = .init(core.cpuallocator);
         defer builder.deinit();
         builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        core.descriptorsetlayouts[4] = builder.build(core.device.handle, c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+        core.descriptorsetlayouts[4] = builder.build(
+            core.device.handle,
+            c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
+            null,
+            0,
+        );
     }
     { // image and sampler, used for per frame swaping of images
         var builder: LayoutBuilder = .init(core.cpuallocator);

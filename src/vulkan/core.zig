@@ -6,11 +6,10 @@
 
 const std = @import("std");
 const log = std.log.scoped(.core);
-const lua = @import("scripting.zig");
 const debug = @import("debug.zig");
-const c = @import("../clibs.zig");
+const c = @import("clibs");
 const Window = @import("../window.zig");
-const PipelineBuilder = @import("pipelines&materials/pipelinebuilder.zig");
+const PipelineBuilder = @import("pipelines/pipelinebuilder.zig");
 const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
@@ -18,11 +17,11 @@ const Swapchain = @import("swapchain.zig");
 const buffer = @import("buffer.zig");
 const commands = @import("commands.zig");
 const image = @import("image.zig");
-const descriptors = @import("descriptors.zig");
-const meshpipeline = @import("pipelines&materials/meshpipeline.zig");
-const metalrough = @import("pipelines&materials/metallicroughness.zig");
-const common = @import("pipelines&materials/common.zig");
-const loop = @import("../applications/test.zig").loop;
+const descriptors = @import("descriptor.zig");
+const meshpipeline = @import("pipelines/meshpipeline.zig");
+const metalrough = @import("pipelines/metallicroughness.zig");
+const common = @import("pipelines/common.zig");
+const loop = @import("../gameloop.zig").loop;
 const data = @import("data.zig");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
@@ -39,9 +38,8 @@ device: Device = undefined,
 surface: c.VkSurfaceKHR = undefined,
 swapchain: Swapchain = undefined,
 framecontext: commands.FrameContexts = .{},
-off_framecontext: commands.OffFrameContext = .{},
+asynccontext: commands.AsyncContext = .{},
 globaldescriptorallocator: descriptors.Allocator = undefined,
-luastate: ?*c.lua_State = undefined,
 formats: [3]c.VkFormat = undefined,
 extents3d: [1]c.VkExtent3D = undefined,
 extents2d: [1]c.VkExtent2D = undefined,
@@ -52,8 +50,8 @@ descriptorsets: [3]c.VkDescriptorSet = undefined,
 allocatedimages: [6]image.AllocatedImage = undefined,
 imageviews: [3]c.VkImageView = undefined,
 samplers: [2]c.VkSampler = undefined,
+allocatedbuffers: [4]buffer.AllocatedBuffer = undefined,
 // TODO covert to a more flat layout for meshes as we did with images and views
-allocatedbuffers: [3]buffer.AllocatedBuffer = undefined,
 meshassets: std.ArrayList(buffer.MeshAsset) = undefined,
 
 pub fn run(allocator: std.mem.Allocator, window: *Window) void {
@@ -63,11 +61,6 @@ pub fn run(allocator: std.mem.Allocator, window: *Window) void {
     engine.cpuallocator = allocator;
     var initallocator = std.heap.ArenaAllocator.init(engine.cpuallocator);
     const initallocatorinstance = initallocator.allocator();
-
-    engine.luastate = c.luaL_newstate();
-    defer c.lua_close(engine.luastate);
-    lua.register_lua_functions(&engine);
-    c.luaL_openlibs(engine.luastate);
 
     engine.instance = Instance.create(initallocatorinstance);
     defer c.vkDestroyInstance(engine.instance.handle, vkallocationcallbacks);
@@ -105,8 +98,8 @@ pub fn run(allocator: std.mem.Allocator, window: *Window) void {
     engine.framecontext.init_frames(&engine);
     defer engine.framecontext.deinit(&engine);
 
-    engine.off_framecontext.init(&engine);
-    defer engine.off_framecontext.deinit(engine.device.handle);
+    engine.asynccontext.init(&engine);
+    defer engine.asynccontext.deinit(engine.device.handle);
 
     descriptors.init_global(&engine);
     defer c.vkDestroyDescriptorSetLayout(engine.device.handle, engine.descriptorsetlayouts[0], vkallocationcallbacks);
@@ -134,6 +127,7 @@ pub fn run(allocator: std.mem.Allocator, window: *Window) void {
 
     data.init_default(&engine);
     defer c.vmaDestroyBuffer(engine.gpuallocator, engine.allocatedbuffers[0].buffer, engine.allocatedbuffers[0].allocation);
+    // defer c.vmaDestroyBuffer(engine.gpuallocator, engine.allocatedbuffers[1].buffer, engine.allocatedbuffers[1].allocation);
     defer for (engine.meshassets.items) |mesh| {
         c.vmaDestroyBuffer(engine.gpuallocator, mesh.mesh_buffers.vertex_buffer.buffer, mesh.mesh_buffers.vertex_buffer.allocation);
         c.vmaDestroyBuffer(engine.gpuallocator, mesh.mesh_buffers.index_buffer.buffer, mesh.mesh_buffers.index_buffer.allocation);

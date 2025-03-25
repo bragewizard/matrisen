@@ -1,6 +1,6 @@
-const c = @import("../../clibs.zig");
-const m = @import("../../3Dmath.zig");
-const descriptors = @import("../descriptors.zig");
+const c = @import("clibs");
+const Vec4 = @import("linalg").Vec4(f32);
+const descriptors = @import("../descriptor.zig");
 const image = @import("../image.zig");
 const std = @import("std");
 const Core = @import("../core.zig");
@@ -12,9 +12,9 @@ const log = std.log.scoped(.metalrough);
 const common = @import("common.zig");
 
 pub const MaterialConstantsUniform = extern struct {
-    colorfactors: m.Vec4,
-    metalrough_factors: m.Vec4,
-    padding: [14]m.Vec4,
+    colorfactors: Vec4,
+    metalrough_factors: Vec4,
+    padding: [14]Vec4,
 };
 
 pub const MaterialResources = struct {

@@ -1,6 +1,6 @@
 const engine = @import("core.zig");
-const c = @import("../clibs.zig");
-const Vec4 = @import("../3Dmath.zig").Vec4;
+const c = @import("clibs");
+const Vec4 = @import("linalg").Vec4;
 
 pub fn set_push_constant(l: ?*c.lua_State) callconv(.C) c_int {
     // const self = @as(*engine, @alignCast(@ptrCast(c.lua_touserdata(l.?, c.lua_upvalueindex(1)))));
