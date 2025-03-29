@@ -10,10 +10,11 @@ const AsyncContext = @import("commands.zig").AsyncContext;
 const commands = @import("commands.zig");
 const Self = @This();
 
-allocatedbuffers: [4]AllocatedBuffer = undefined,
-vertex_buffers: [4]AllocatedBuffer = undefined,
-index_buffers: [1]AllocatedBuffer = undefined,
-vertex_buffer_adresses: [2]c.VkDeviceAddress = undefined,
+uniform: [4]AllocatedBuffer = undefined,
+storage: [4]AllocatedBuffer = undefined,
+vertex: [4]AllocatedBuffer = undefined,
+index: [1]AllocatedBuffer = undefined,
+adresses: [2]c.VkDeviceAddress = undefined,
 meshassets: [1]MeshAsset = undefined,
 
 pub const AllocatedBuffer = struct {
@@ -31,9 +32,9 @@ pub const Vertex = extern struct {
 };
 
 pub const MeshBuffers = struct {
-    vertex_buffer: u32,
-    index_buffer: u32,
-    vertex_buffer_adress: u32,
+    vertex_buffer: AllocatedBuffer,
+    index_buffer: AllocatedBuffer,
+    vertex_buffer_adress: c.VkDeviceAddress,
 };
 
 pub const GeoSurface = struct {
@@ -96,8 +97,7 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
     const index_buffer = create(
         core,
         index_buffer_size,
-        c.VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-            c.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        c.VK_BUFFER_USAGE_INDEX_BUFFER_BIT | c.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         c.VMA_MEMORY_USAGE_GPU_ONLY,
     );
 
@@ -130,13 +130,11 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
     c.vkCmdCopyBuffer(cmd, staging.buffer, vertex_buffer.buffer, 1, &vertex_copy_region);
     c.vkCmdCopyBuffer(cmd, staging.buffer, index_buffer.buffer, 1, &index_copy_region);
     AsyncContext.submitEnd(core);
-    core.buffers.vertex_buffers[0] = vertex_buffer;
-    core.buffers.index_buffers[0] = index_buffer;
-    core.buffers.vertex_buffer_adresses[0] = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
+    const address = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
     return .{
-        .vertex_buffer = 0,
-        .index_buffer = 0,
-        .vertex_buffer_adress = 0,
+        .vertex_buffer = vertex_buffer,
+        .index_buffer = index_buffer,
+        .vertex_buffer_adress = address,
     };
 }
 
@@ -146,5 +144,14 @@ pub fn init(core: *Core) void {
 }
 
 pub fn deinit(core: *Core) void {
-    _ = core;
+    const self = &core.buffers;
+    defer for (self.meshassets) |mesh| {
+        mesh.surfaces.deinit();
+    };
+
+    defer c.vmaDestroyBuffer(core.gpuallocator, self.uniform[0].buffer, self.uniform[0].allocation);
+    defer for (self.meshassets) |mesh| {
+        c.vmaDestroyBuffer(core.gpuallocator, mesh.mesh_buffers.vertex_buffer.buffer, mesh.mesh_buffers.vertex_buffer.allocation);
+        c.vmaDestroyBuffer(core.gpuallocator, mesh.mesh_buffers.index_buffer.buffer, mesh.mesh_buffers.index_buffer.allocation);
+    };
 }

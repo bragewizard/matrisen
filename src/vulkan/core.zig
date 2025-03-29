@@ -14,16 +14,16 @@ const AsyncContext = commands.AsyncContext;
 const Window = @import("../window.zig");
 const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
-const Pipelines = @import("pipelines.zig");
+const Pipelines = @import("pipelines/root.zig");
 const Device = @import("device.zig").Device;
 const Swapchain = @import("swapchain.zig");
 const Buffers = @import("buffers.zig");
 const Images = @import("images.zig");
 
-
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
 const Self = @This();
 
+vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = undefined,
 resizerequest: bool = false,
 framenumber: u64 = 0,
 cpuallocator: std.mem.Allocator = undefined,
@@ -40,28 +40,29 @@ images: Images = .{},
 pipelines: Pipelines = .{},
 
 pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
-    var self : Self = .{};
-    self.images.window_extent = .{ .width = 0, .height = 0 };
+    var self: Self = .{};
+    self.images.swapchain_extent = .{ .width = 0, .height = 0 };
     self.cpuallocator = allocator;
     var initallocator = std.heap.ArenaAllocator.init(self.cpuallocator);
     const initallocatorinstance = initallocator.allocator();
     Instance.init(&self, initallocatorinstance);
     window.create_surface(self.instance.handle, &self.surface);
-    window.get_size(&self.images.window_extent.width, &self.images.window_extent.height);
+    window.get_size(&self.images.swapchain_extent.width, &self.images.swapchain_extent.height);
     PhysicalDevice.select(&self, initallocatorinstance);
     Device.init(&self, initallocatorinstance);
     Swapchain.init(&self);
-    const allocator_ci : c.VmaAllocatorCreateInfo = .{
+    const allocator_ci: c.VmaAllocatorCreateInfo = .{
         .physicalDevice = self.physicaldevice.handle,
         .device = self.device.handle,
         .instance = self.instance.handle,
         .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
     };
     debug.check_vk_panic(c.vmaCreateAllocator(&allocator_ci, &self.gpuallocator));
-    Images.init(&self);
-    Buffers.init(&self);
+    Images.createRenderAttachments(&self);
     FrameContexts.init(&self);
     AsyncContext.init(&self);
+    Images.createDefaultTextures(&self);
+    Buffers.init(&self);
     Pipelines.init(&self);
     initallocator.deinit();
     return self;
@@ -83,6 +84,4 @@ pub fn deinit(self: *Self) void {
     defer Pipelines.deinit(self);
     defer Buffers.deinit(self);
     defer Images.deinit(self);
-
 }
-

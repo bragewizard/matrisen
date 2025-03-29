@@ -16,7 +16,6 @@ const PhysicalDeviceSelectionCriteria = enum {
     PreferIntegrated,
 };
 
-pub var vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = undefined;
 
 pub const PhysicalDevice = struct {
     handle: c.VkPhysicalDevice = null,
@@ -298,7 +297,7 @@ pub const Device = struct {
         if (procAddr == null) {
             @panic("");
         }
-        vkCmdDrawMeshTasksEXT = procAddr;
+        core.vkCmdDrawMeshTasksEXT = procAddr;
 
         core.device.handle = device;
         core.device.graphics_queue = graphics_queue;

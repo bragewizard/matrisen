@@ -3,7 +3,8 @@ const log = std.log.scoped(.commands);
 const c = @import("clibs");
 const buffer = @import("buffers.zig");
 const debug = @import("debug.zig");
-const pipelines = @import("pipelines.zig");
+const descriptorbuilder = @import("descriptorbuilder.zig");
+const Allocator = descriptorbuilder.Allocator;
 const Core = @import("core.zig");
 const Device = @import("device.zig").Device;
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
@@ -17,7 +18,7 @@ pub const FrameContext = struct {
     render_fence: c.VkFence = null,
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
-    descriptors: pipelines.Allocator = .{},
+    descriptors: Allocator = .{},
     allocatedbuffers: buffer.AllocatedBuffer = undefined,
     swapchain_image_index: u32 = 0,
     draw_extent: c.VkExtent2D = undefined,
@@ -28,6 +29,7 @@ pub const FrameContext = struct {
 
     pub fn submitBegin(frame: *FrameContext, core: *Core) void {
         const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
+        const images = core.images;
         debug.check_vk_panic(c.vkWaitForFences(core.device.handle, 1, &frame.render_fence, c.VK_TRUE, timeout));
 
         const e = c.vkAcquireNextImageKHR(
@@ -56,50 +58,50 @@ pub const FrameContext = struct {
         });
 
         var draw_extent: c.VkExtent2D = .{};
-        const render_scale = 1.0;
+        const render_scale = 0.25;
         draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(
-            core.images.extent2d[0].width,
-            core.images.extent3d[0].width,
+            images.swapchain_extent.width,
+            images.swapchain_extent.width,
         ))) * render_scale);
         draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(
-            core.images.extent2d[0].height,
-            core.images.extent3d[0].height,
+            images.swapchain_extent.height,
+            images.swapchain_extent.height,
         ))) * render_scale);
         frame.draw_extent = draw_extent;
 
         debug.check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
-        transition_image(cmd, core.images.allocated[0].image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
+        transition_image(cmd, images.colorattachment.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
         const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.02, 0.02, 0.02, 1 } };
         const clearrange = c.VkImageSubresourceRange{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .levelCount = 1,
             .layerCount = 1,
         };
-        c.vkCmdClearColorImage(cmd, core.images.allocated[0].image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
+        c.vkCmdClearColorImage(cmd, images.colorattachment.image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
 
         transition_image(
             cmd,
-            core.images.allocated[0].image,
+            core.images.colorattachment.image,
             c.VK_IMAGE_LAYOUT_GENERAL,
             c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         );
         transition_image(
             cmd,
-            core.images.allocated[1].image,
+            core.images.depthstencilattachment.image,
             c.VK_IMAGE_LAYOUT_UNDEFINED,
             c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         );
 
         const color_attachment: c.VkRenderingAttachmentInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = core.images.views[0],
+            .imageView = images.colorattachment.views[0],
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
         };
         const depth_attachment: c.VkRenderingAttachmentInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .imageView = core.images.views[1],
+            .imageView = images.depthstencilattachment.views[0],
             .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
             .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
@@ -140,26 +142,27 @@ pub const FrameContext = struct {
     }
 
     pub fn submitEnd(frame: *FrameContext, core: *Core) void {
+        const images = core.images;
         const cmd = frame.command_buffer;
         c.vkCmdEndRendering(cmd);
         transition_image(
             cmd,
-            core.images.allocated[0].image,
+            images.colorattachment.image,
             c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         );
         transition_image(
             cmd,
-            core.images.swapchain[frame.swapchain_image_index],
+            images.swapchain[frame.swapchain_image_index],
             c.VK_IMAGE_LAYOUT_UNDEFINED,
             c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         );
         copy_image_to_image(
             cmd,
-            core.images.allocated[0].image,
-            core.images.swapchain[frame.swapchain_image_index],
+            images.colorattachment.image,
+            images.swapchain[frame.swapchain_image_index],
             frame.draw_extent,
-            core.images.extent2d[0],
+            images.swapchain_extent,
         );
         transition_image(
             cmd,
@@ -212,7 +215,6 @@ pub const FrameContext = struct {
         };
         _ = c.vkQueuePresentKHR(core.device.graphics_queue, &present_info);
         core.framenumber +%= 1;
-        core.framecontexts.switch_frame();
     }
 };
 
@@ -262,7 +264,7 @@ pub const FrameContexts = struct {
                 vk_alloc_cbs,
                 &frame.render_fence,
             ));
-            var ratios = [_]pipelines.Allocator.PoolSizeRatio{
+            var ratios = [_]Allocator.PoolSizeRatio{
                 .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
                 .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
                 .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
@@ -280,6 +282,7 @@ pub const FrameContexts = struct {
             c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
             frame.descriptors.deinit(core.device.handle);
+            std.debug.print("remove here\n", .{});
             frame.flush(core);
         }
     }
@@ -295,7 +298,7 @@ pub const AsyncContext = struct {
     command_buffer: c.VkCommandBuffer = null,
 
     pub fn init(core: *Core) void {
-        var self = core.asynccontext;
+        var self = &core.asynccontext;
         const command_pool_ci: c.VkCommandPoolCreateInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags = c.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -335,13 +338,13 @@ pub const AsyncContext = struct {
     }
 
     pub fn deinit(core: *Core) void {
-        const self = core.asynccontext;
+        const self = &core.asynccontext;
         c.vkDestroyCommandPool(core.device.handle, self.command_pool, Core.vkallocationcallbacks);
         c.vkDestroyFence(core.device.handle, self.fence, Core.vkallocationcallbacks);
     }
 
     pub fn submitBegin(core: *Core) void {
-        var self = core.asynccontext;
+        var self = &core.asynccontext;
         debug.check_vk(c.vkResetFences(core.device.handle, 1, &self.fence)) catch @panic("Failed to reset immidiate fence");
         debug.check_vk(c.vkResetCommandBuffer(self.command_buffer, 0)) catch @panic("Failed to reset immidiate command buffer");
         const cmd = self.command_buffer;
@@ -354,7 +357,7 @@ pub const AsyncContext = struct {
     }
 
     pub fn submitEnd(core: *Core) void {
-        var self = core.asynccontext;
+        var self = &core.asynccontext;
         const cmd = self.command_buffer;
         debug.check_vk(c.vkEndCommandBuffer(cmd)) catch @panic("Failed to end command buffer");
 

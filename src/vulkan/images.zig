@@ -9,38 +9,45 @@ const AsyncContext = @import("commands.zig").AsyncContext;
 const Vec4 = @import("geometry").Vec4(f32);
 const Core = @import("core.zig");
 
-
-formats: [3]c.VkFormat = undefined,
+textures: [6]AllocatedImage(1) = undefined,
+depths: [1]AllocatedImage(1) = undefined,
 extent3d: [1]c.VkExtent3D = undefined,
 extent2d: [1]c.VkExtent2D = undefined,
-allocated: [6]AllocatedImage = undefined,
-views: [3]c.VkImageView = undefined,
 samplers: [2]c.VkSampler = undefined,
 
-window_extent: c.VkExtent2D = .{},
+renderattachmentformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT,
+depth_format: c.VkFormat = c.VK_FORMAT_D32_SFLOAT,
+colorattachment: AllocatedImage(1) = undefined,
+depthstencilattachment: AllocatedImage(1) = undefined,
 
 swapchain_format: c.VkFormat = undefined,
-swapchain_extent:c.VkExtent2D = .{},
+swapchain_extent: c.VkExtent2D = .{},
 swapchain: []c.VkImage = &.{},
 swapchain_views: []c.VkImageView = &.{},
 
 const Self = @This();
 
-pub fn init(core: *Core) void {
-    var self = core.images;
+pub fn AllocatedImage(N: comptime_int) type {
+    return struct {
+        image: c.VkImage,
+        allocation: c.VmaAllocation,
+        views: [N]c.VkImageView,
+    };
+}
+
+pub fn createRenderAttachments(core: *Core) void {
+    var self = &core.images;
     const extent: c.VkExtent3D = .{
-        .width = self.window_extent.width,
-        .height = self.window_extent.height,
+        .width = self.swapchain_extent.width,
+        .height = self.swapchain_extent.height,
         .depth = 1,
     };
     self.extent3d[0] = extent;
 
-    const format = c.VK_FORMAT_R16G16B16A16_SFLOAT;
-    self.formats[1] = format;
     const draw_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = format,
+        .format = self.renderattachmentformat,
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -52,24 +59,24 @@ pub fn init(core: *Core) void {
             c.VK_IMAGE_USAGE_STORAGE_BIT,
     };
 
-    const draw_image_ai = std.mem.zeroInit(c.VmaAllocationCreateInfo, .{
+    const draw_image_ai: c.VmaAllocationCreateInfo = .{
         .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
         .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-    });
+    };
 
     check_vk_panic(c.vmaCreateImage(
         core.gpuallocator,
         &draw_image_ci,
         &draw_image_ai,
-        &self.allocated[0].image,
-        &self.allocated[0].allocation,
+        &self.colorattachment.image,
+        &self.colorattachment.allocation,
         null,
     ));
-    const draw_image_view_ci : c.VkImageViewCreateInfo = .{
+    const draw_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.allocated[0].image,
+        .image = self.colorattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = format,
+        .format = self.renderattachmentformat,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -83,16 +90,14 @@ pub fn init(core: *Core) void {
         core.device.handle,
         &draw_image_view_ci,
         Core.vkallocationcallbacks,
-        &self.views[0],
+        &self.colorattachment.views[0],
     ));
 
     const depth_extent = extent;
-    const depth_format = c.VK_FORMAT_D32_SFLOAT;
-    self.formats[2] = depth_format;
     const depth_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = depth_format,
+        .format = self.depth_format,
         .extent = depth_extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -107,16 +112,16 @@ pub fn init(core: *Core) void {
         core.gpuallocator,
         &depth_image_ci,
         &draw_image_ai,
-        &self.allocated[1].image,
-        &self.allocated[1].allocation,
+        &self.depthstencilattachment.image,
+        &self.depthstencilattachment.allocation,
         null,
     ));
 
-    const depth_image_view_ci : c.VkImageViewCreateInfo = .{
+    const depth_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.allocated[1].image,
+        .image = self.depthstencilattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = depth_format,
+        .format = self.depth_format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_DEPTH_BIT,
             .baseMipLevel = 0,
@@ -129,17 +134,19 @@ pub fn init(core: *Core) void {
         core.device.handle,
         &depth_image_view_ci,
         Core.vkallocationcallbacks,
-        &self.views[1],
+        &self.depthstencilattachment.views[0],
     ));
-    log.info("Created depth and draw image", .{});
+}
 
+pub fn createDefaultTextures(core: *Core) void {
+    var self = &core.images;
     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
     var white: u32 = Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
     var grey: u32 = Vec4.packU8(.{ .x = 0.3, .y = 0.3, .z = 0.3, .w = 1 });
     var black: u32 = Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 0 });
     const magenta: u32 = Vec4.packU8(.{ .x = 1, .y = 0, .z = 1, .w = 1 });
 
-    self.allocated[2] = create_upload(
+    self.textures[0] = create_upload(
         core,
         &white,
         size,
@@ -147,7 +154,7 @@ pub fn init(core: *Core) void {
         c.VK_IMAGE_USAGE_SAMPLED_BIT,
         false,
     );
-    self.allocated[3] = create_upload(
+    self.textures[1] = create_upload(
         core,
         &grey,
         size,
@@ -155,7 +162,7 @@ pub fn init(core: *Core) void {
         c.VK_IMAGE_USAGE_SAMPLED_BIT,
         false,
     );
-    self.allocated[4] = create_upload(
+    self.textures[2] = create_upload(
         core,
         &black,
         size,
@@ -163,9 +170,9 @@ pub fn init(core: *Core) void {
         c.VK_IMAGE_USAGE_SAMPLED_BIT,
         false,
     );
-    self.views[2] = create_view(
+    self.textures[1].views[0] = create_view(
         core.device.handle,
-        self.allocated[3].image,
+        self.textures[1].image,
         c.VK_FORMAT_R8G8B8A8_UNORM,
         1,
     );
@@ -177,7 +184,7 @@ pub fn init(core: *Core) void {
             checker[y * 16 + x] = if (tile == 1) black else magenta;
         }
     }
-    self.allocated[5] = create_upload(
+    self.textures[3] = create_upload(
         core,
         &checker,
         .{ .width = 16, .height = 16, .depth = 1 },
@@ -199,18 +206,36 @@ pub fn init(core: *Core) void {
 }
 
 pub fn deinit(core: *Core) void {
-    _ = core;
+    const self = &core.images;
+    c.vmaDestroyImage(core.gpuallocator, self.colorattachment.image, self.colorattachment.allocation);
+    c.vkDestroyImageView(core.device.handle, self.colorattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, self.depthstencilattachment.image, self.depthstencilattachment.allocation);
+    c.vkDestroyImageView(core.device.handle, self.depthstencilattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, self.textures[0].image, self.textures[0].allocation);
+    // c.vkDestroyImageView(core.device.handle, self.textures[0].views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, self.textures[1].image, self.textures[1].allocation);
+    c.vkDestroyImageView(core.device.handle, self.textures[1].views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, self.textures[2].image, self.textures[2].allocation);
+    // c.vkDestroyImageView(core.device.handle, self.textures[2].views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, self.textures[3].image, self.textures[3].allocation);
+    // c.vkDestroyImageView(core.device.handle, self.textures[3].views[0], null);
+    c.vkDestroySampler(core.device.handle, self.samplers[0], null);
+    c.vkDestroySampler(core.device.handle, self.samplers[1], null);
+    for (self.swapchain_views) |view| {
+        c.vkDestroyImageView(core.device.handle, view, null);
+    }
+    core.cpuallocator.free(self.swapchain);
+    core.cpuallocator.free(self.swapchain_views);
 }
 
-
-
-pub const AllocatedImage = struct {
-    image: c.VkImage,
-    allocation: c.VmaAllocation,
-};
-
-pub fn create(core: *Core, size: c.VkExtent3D, format: c.VkFormat, usage: c.VkImageUsageFlags, mipmapped: bool) AllocatedImage {
-    var new_image: AllocatedImage = undefined;
+pub fn create(
+    core: *Core,
+    size: c.VkExtent3D,
+    format: c.VkFormat,
+    usage: c.VkImageUsageFlags,
+    mipmapped: bool,
+) AllocatedImage(1) {
+    var new_image: AllocatedImage(1) = undefined;
     var img_info = c.VkImageCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext = null,
@@ -275,7 +300,7 @@ pub fn create_upload(
     format: c.VkFormat,
     usage: c.VkImageUsageFlags,
     mipmapped: bool,
-) AllocatedImage {
+) AllocatedImage(1) {
     const data_size = size.width * size.height * size.depth * 4;
 
     const staging = buffer.create(core, data_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -295,7 +320,7 @@ pub fn create_upload(
     AsyncContext.submitBegin(core);
     const cmd = core.asynccontext.command_buffer;
     commands.transition_image(cmd, new_image.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    const image_copy_region = std.mem.zeroInit(c.VkBufferImageCopy, .{
+    const image_copy_region: c.VkBufferImageCopy = .{
         .bufferOffset = 0,
         .bufferRowLength = 0,
         .bufferImageHeight = 0,
@@ -306,7 +331,7 @@ pub fn create_upload(
             .layerCount = 1,
         },
         .imageExtent = size,
-    });
+    };
     c.vkCmdCopyBufferToImage(cmd, staging.buffer, new_image.image, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy_region);
     commands.transition_image(
         cmd,
