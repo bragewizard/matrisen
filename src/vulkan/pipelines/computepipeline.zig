@@ -49,3 +49,22 @@ pub const ComputePushConstants = extern struct {
 //     self.pipeline_deletion_queue.push(self.gradient_pipeline);
 //     self.pipeline_layout_deletion_queue.push(self.gradient_pipeline_layout);
 // }
+
+
+
+
+
+
+{ // draw image
+    var builder: LayoutBuilder = .init(core.cpuallocator);
+    defer builder.deinit();
+    builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    core.descriptorsetlayouts[0] = builder.build(core.device.handle, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
+}
+// draw image set here, only used for compute drawing
+core.descriptorsets[0] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[0], null);
+var writer: Writer = .init(core.cpuallocator);
+defer writer.deinit();
+writer.write_image(0, core.imageviews[0], null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+writer.update_set(core.device.handle, core.descriptorsets[0]);
+log.info("Initialized global descriptors", .{});

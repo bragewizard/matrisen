@@ -8,6 +8,7 @@ const descriptors = @import("../descriptor.zig");
 const std = @import("std");
 const log = std.log.scoped(.meshshader);
 const c = @import("clibs");
+const Mat4x4 = @import("linalg").Mat4x4(f32);
 
 pub fn build_pipeline(core: *Core) void {
     const mesh_code align(4) = @embedFile("simple.mesh.glsl").*;
@@ -38,9 +39,18 @@ pub fn build_pipeline(core: *Core) void {
     layout_builder.add_binding(1, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     layout_builder.add_binding(2, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    core.descriptorsetlayouts[5] = layout_builder.build(core.device.handle, c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
+    core.descriptorsetlayouts[5] = layout_builder.build(
+        core.device.handle,
+        c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
+        null,
+        0,
+    );
 
-    const matrixrange = c.VkPushConstantRange{ .offset = 0, .size = @sizeOf(common.ModelPushConstants), .stageFlags = c.VK_SHADER_STAGE_MESH_BIT_EXT };
+    const matrixrange = c.VkPushConstantRange{
+        .offset = 0,
+        .size = @sizeOf(common.ModelPushConstants),
+        .stageFlags = c.VK_SHADER_STAGE_MESH_BIT_EXT,
+    };
     const layouts = [_]c.VkDescriptorSetLayout{ core.descriptorsetlayouts[4], core.descriptorsetlayouts[5] };
 
     const shader_stages: [2]c.VkPipelineShaderStageCreateInfo = .{ stage_mesh, stage_frag };
@@ -62,11 +72,11 @@ pub fn build_pipeline(core: *Core) void {
         .lineWidth = 1.0,
     };
 
-    const depth_stencil : c.VkPipelineDepthStencilStateCreateInfo = .{
+    const depth_stencil: c.VkPipelineDepthStencilStateCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = c.VK_TRUE,
-        .depthWriteEnable = c.VK_FALSE,
-        .depthCompareOp = c.VK_COMPARE_OP_GREATER_OR_EQUAL,
+        .depthWriteEnable = c.VK_TRUE,
+        .depthCompareOp = c.VK_COMPARE_OP_LESS,
         .depthBoundsTestEnable = c.VK_FALSE,
         .stencilTestEnable = c.VK_FALSE,
         .minDepthBounds = 0.0,
@@ -122,16 +132,6 @@ pub fn build_pipeline(core: *Core) void {
         .logicOp = c.VK_LOGIC_OP_COPY,
     };
 
-    // const input_assembly: c.VkPipelineInputAssemblyStateCreateInfo = .{
-    //     .sType = c.VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-    //     .topology = c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-    //     .primitiveRestartEnable = c.VK_FALSE,
-    // };
-
-    // const vertex_input_info: c.VkPipelineVertexInputStateCreateInfo = .{
-    //     .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-    // };
-
     var pipeline_info: c.VkGraphicsPipelineCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &rendering_info,
@@ -143,12 +143,10 @@ pub fn build_pipeline(core: *Core) void {
         .pColorBlendState = &color_blending,
         .pMultisampleState = &multisample,
         .pDepthStencilState = &depth_stencil,
-        // .pInputAssemblyState = &input_assembly,
-        // .pVertexInputState = &vertex_input_info,
     };
 
     const dynamic_state: [2]c.VkDynamicState = .{ c.VK_DYNAMIC_STATE_VIEWPORT, c.VK_DYNAMIC_STATE_SCISSOR };
-    const dynamic_state_info : c.VkPipelineDynamicStateCreateInfo =.{ .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = dynamic_state.len, .pDynamicStates = &dynamic_state[0] };
+    const dynamic_state_info: c.VkPipelineDynamicStateCreateInfo = .{ .sType = c.VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = dynamic_state.len, .pDynamicStates = &dynamic_state[0] };
 
     pipeline_info.pDynamicState = &dynamic_state_info;
 
@@ -161,3 +159,60 @@ pub fn build_pipeline(core: *Core) void {
 }
 
 pub fn writeDescriptors() void {}
+
+
+pub fn draw(core: *Core, cmd: c.VkCommandBuffer) void {
+    const frame_index = core.framecontext.current;
+    var frame = &core.framecontext.frames[frame_index];
+    const global_descriptor = frame.descriptors.allocate(core.device.handle, core.descriptorsetlayouts[3], null);
+    {
+        var writer: descriptors.Writer = .init(core.cpuallocator);
+        defer writer.deinit();
+        writer.write_buffer(
+            0,
+            frame.allocatedbuffers.buffer,
+            @sizeOf(common.SceneDataUniform),
+            0,
+            c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        );
+        writer.update_set(core.device.handle, global_descriptor);
+    }
+
+    const view = Mat4x4.identity;
+    const model = view;
+    var push_constants: common.ModelPushConstants = .{
+        .model = model,
+        .vertex_buffer = core.meshassets.items[0].mesh_buffers.vertex_buffer_adress,
+    };
+
+    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, core.pipelines[0]);
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        core.pipelinelayouts[0],
+        0,
+        1,
+        &global_descriptor,
+        0,
+        null,
+    );
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        core.pipelinelayouts[0],
+        1,
+        1,
+        &core.descriptorsets[2],
+        0,
+        null,
+    );
+    c.vkCmdPushConstants(
+        cmd,
+        core.pipelinelayouts[0],
+        c.VK_SHADER_STAGE_MESH_BIT_EXT,
+        0,
+        @sizeOf(common.ModelPushConstants),
+        &push_constants,
+    );
+    core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
+}

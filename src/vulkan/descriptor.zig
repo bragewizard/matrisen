@@ -264,56 +264,10 @@ pub const Writer = struct {
     }
 };
 
-// TODO remove this and move the descriptorlayout creation to their respective location
-// -> materials/ or -> core
 pub fn init_global(core: *Core) void {
     var sizes = [_]Allocator.PoolSizeRatio{
         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
     };
-
     core.globaldescriptorallocator.init(core.device.handle, 10, &sizes, core.cpuallocator);
-    { // draw image
-        var builder: LayoutBuilder = .init(core.cpuallocator);
-        defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        core.descriptorsetlayouts[0] = builder.build(core.device.handle, c.VK_SHADER_STAGE_COMPUTE_BIT, null, 0);
-    }
-    { // scenedata uniform
-        var builder: LayoutBuilder = .init(core.cpuallocator);
-        defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        core.descriptorsetlayouts[1] = builder.build(
-            core.device.handle,
-            c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
-            null,
-            0,
-        );
-    }
-    { // scenedata uniform for mesh shader
-        var builder: LayoutBuilder = .init(core.cpuallocator);
-        defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        core.descriptorsetlayouts[4] = builder.build(
-            core.device.handle,
-            c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
-            null,
-            0,
-        );
-    }
-    { // image and sampler, used for per frame swaping of images
-        var builder: LayoutBuilder = .init(core.cpuallocator);
-        defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        core.descriptorsetlayouts[2] = builder.build(core.device.handle, c.VK_SHADER_STAGE_FRAGMENT_BIT, null, 0);
-    }
-
-    // draw image set here, only used for compute drawing
-    core.descriptorsets[0] = core.globaldescriptorallocator.allocate(core.device.handle, core.descriptorsetlayouts[0], null);
-
-    var writer: Writer = .init(core.cpuallocator);
-    defer writer.deinit();
-    writer.write_image(0, core.imageviews[0], null, c.VK_IMAGE_LAYOUT_GENERAL, c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    writer.update_set(core.device.handle, core.descriptorsets[0]);
-    log.info("Initialized global descriptors", .{});
 }

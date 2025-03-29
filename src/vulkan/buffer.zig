@@ -22,24 +22,18 @@ pub const Vertex = extern struct {
     color: Vec4,
 };
 
-pub const MeshBuffers = struct {
-    vertex_buffer: AllocatedBuffer,
-    index_buffer: AllocatedBuffer,
-    vertex_buffer_adress: c.VkDeviceAddress,
+pub const Mesh = struct {
+    vertexbuffer: u32,
+    indexbuffer: u32,
+    vertexbuffer_adress: u32,
 };
 
-pub const GeoSurface = struct {
-    start_index: u32,
-    count: u32,
-};
-
-pub const MeshAsset = struct {
-    name: []const u8,
-    surfaces: std.ArrayList(GeoSurface),
-    mesh_buffers: MeshBuffers = undefined,
-};
-
-pub fn create(core: *Core, alloc_size: usize, usage: c.VkBufferUsageFlags, memory_usage: c.VmaMemoryUsage,) AllocatedBuffer {
+pub fn create(
+    core: *Core,
+    alloc_size: usize,
+    usage: c.VkBufferUsageFlags,
+    memory_usage: c.VmaMemoryUsage,
+) AllocatedBuffer {
     const buffer_info: c.VkBufferCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = alloc_size,
@@ -63,12 +57,11 @@ pub fn create(core: *Core, alloc_size: usize, usage: c.VkBufferUsageFlags, memor
     return new_buffer;
 }
 
-pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers {
+pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) Mesh {
     const index_buffer_size = @sizeOf(u32) * indices.len;
     const vertex_buffer_size = @sizeOf(Vertex) * vertices.len;
 
-    var new_surface: MeshBuffers = undefined;
-    new_surface.vertex_buffer = create(
+    const vertex_buffer = create(
         core,
         vertex_buffer_size,
         c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
@@ -79,17 +72,17 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
 
     const device_address_info: c.VkBufferDeviceAddressInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = new_surface.vertex_buffer.buffer,
+        .buffer = vertex_buffer.buffer,
     };
 
-    new_surface.vertex_buffer_adress = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
-    new_surface.index_buffer = create(
+    const index_buffer = create(
         core,
         index_buffer_size,
         c.VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
             c.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         c.VMA_MEMORY_USAGE_GPU_ONLY,
     );
+
 
     const staging = create(
         core,
@@ -111,28 +104,31 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
         vertex_buffer_size: usize,
         index_buffer_size: usize,
         pub fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
-            const vertex_copy_region = std.mem.zeroInit(c.VkBufferCopy, .{
+            const vertex_copy_region: c.VkBufferCopy = .{
                 .srcOffset = 0,
                 .dstOffset = 0,
                 .size = sself.vertex_buffer_size,
-            });
+            };
 
-            const index_copy_region = std.mem.zeroInit(c.VkBufferCopy, .{
+            const index_copy_region: c.VkBufferCopy = .{
                 .srcOffset = sself.vertex_buffer_size,
                 .dstOffset = 0,
                 .size = sself.index_buffer_size,
-            });
+            };
 
             c.vkCmdCopyBuffer(cmd, sself.staging_buffer, sself.vertex_buffer, 1, &vertex_copy_region);
             c.vkCmdCopyBuffer(cmd, sself.staging_buffer, sself.index_buffer, 1, &index_copy_region);
         }
     }{
-        .vertex_buffer = new_surface.vertex_buffer.buffer,
-        .index_buffer = new_surface.index_buffer.buffer,
+        .vertex_buffer = vertex_buffer.buffer,
+        .index_buffer = index_buffer.buffer,
         .staging_buffer = staging.buffer,
         .vertex_buffer_size = vertex_buffer_size,
         .index_buffer_size = index_buffer_size,
     };
     core.asynccontext.submit(core, submit_ctx);
-    return new_surface;
+    core.vertex_buffers[0] = vertex_buffer;
+    core.index_buffers[0] = index_buffer;
+    core.vertex_buffer_adresses[0] = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
+    return .{};
 }
