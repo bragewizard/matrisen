@@ -1,12 +1,20 @@
 const std = @import("std");
 const c = @import("clibs");
-const linalg = @import("linalg");
-const Vec3 = linalg.Vec3(f32);
-const Vec4 = linalg.Vec4(f32);
+const geometry = @import("geometry");
+const Vec3 = geometry.Vec3(f32);
+const Vec4 = geometry.Vec4(f32);
 const debug = @import("debug.zig");
+const gltf = @import("../gltf.zig");
 const Core = @import("core.zig");
+const AsyncContext = @import("commands.zig").AsyncContext;
 const commands = @import("commands.zig");
 const Self = @This();
+
+allocatedbuffers: [4]AllocatedBuffer = undefined,
+vertex_buffers: [4]AllocatedBuffer = undefined,
+index_buffers: [1]AllocatedBuffer = undefined,
+vertex_buffer_adresses: [2]c.VkDeviceAddress = undefined,
+meshassets: [1]MeshAsset = undefined,
 
 pub const AllocatedBuffer = struct {
     buffer: c.VkBuffer,
@@ -22,10 +30,20 @@ pub const Vertex = extern struct {
     color: Vec4,
 };
 
-pub const Mesh = struct {
-    vertexbuffer: u32,
-    indexbuffer: u32,
-    vertexbuffer_adress: u32,
+pub const MeshBuffers = struct {
+    vertex_buffer: u32,
+    index_buffer: u32,
+    vertex_buffer_adress: u32,
+};
+
+pub const GeoSurface = struct {
+    start_index: u32,
+    count: u32,
+};
+
+pub const MeshAsset = struct {
+    surfaces: std.ArrayList(GeoSurface),
+    mesh_buffers: MeshBuffers = undefined,
 };
 
 pub fn create(
@@ -57,7 +75,7 @@ pub fn create(
     return new_buffer;
 }
 
-pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) Mesh {
+pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers {
     const index_buffer_size = @sizeOf(u32) * indices.len;
     const vertex_buffer_size = @sizeOf(Vertex) * vertices.len;
 
@@ -83,7 +101,6 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) Mesh {
         c.VMA_MEMORY_USAGE_GPU_ONLY,
     );
 
-
     const staging = create(
         core,
         index_buffer_size + vertex_buffer_size,
@@ -97,38 +114,37 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) Mesh {
     const byte_data = @as([*]u8, @ptrCast(data));
     @memcpy(byte_data[0..vertex_buffer_size], std.mem.sliceAsBytes(vertices));
     @memcpy(byte_data[vertex_buffer_size..], std.mem.sliceAsBytes(indices));
-    const submit_ctx = struct {
-        vertex_buffer: c.VkBuffer,
-        index_buffer: c.VkBuffer,
-        staging_buffer: c.VkBuffer,
-        vertex_buffer_size: usize,
-        index_buffer_size: usize,
-        pub fn submit(sself: @This(), cmd: c.VkCommandBuffer) void {
-            const vertex_copy_region: c.VkBufferCopy = .{
-                .srcOffset = 0,
-                .dstOffset = 0,
-                .size = sself.vertex_buffer_size,
-            };
-
-            const index_copy_region: c.VkBufferCopy = .{
-                .srcOffset = sself.vertex_buffer_size,
-                .dstOffset = 0,
-                .size = sself.index_buffer_size,
-            };
-
-            c.vkCmdCopyBuffer(cmd, sself.staging_buffer, sself.vertex_buffer, 1, &vertex_copy_region);
-            c.vkCmdCopyBuffer(cmd, sself.staging_buffer, sself.index_buffer, 1, &index_copy_region);
-        }
-    }{
-        .vertex_buffer = vertex_buffer.buffer,
-        .index_buffer = index_buffer.buffer,
-        .staging_buffer = staging.buffer,
-        .vertex_buffer_size = vertex_buffer_size,
-        .index_buffer_size = index_buffer_size,
+    AsyncContext.submitBegin(core);
+    const vertex_copy_region: c.VkBufferCopy = .{
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = vertex_buffer_size,
     };
-    core.asynccontext.submit(core, submit_ctx);
-    core.vertex_buffers[0] = vertex_buffer;
-    core.index_buffers[0] = index_buffer;
-    core.vertex_buffer_adresses[0] = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
-    return .{};
+
+    const index_copy_region: c.VkBufferCopy = .{
+        .srcOffset = vertex_buffer_size,
+        .dstOffset = 0,
+        .size = index_buffer_size,
+    };
+    const cmd = core.asynccontext.command_buffer;
+    c.vkCmdCopyBuffer(cmd, staging.buffer, vertex_buffer.buffer, 1, &vertex_copy_region);
+    c.vkCmdCopyBuffer(cmd, staging.buffer, index_buffer.buffer, 1, &index_copy_region);
+    AsyncContext.submitEnd(core);
+    core.buffers.vertex_buffers[0] = vertex_buffer;
+    core.buffers.index_buffers[0] = index_buffer;
+    core.buffers.vertex_buffer_adresses[0] = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
+    return .{
+        .vertex_buffer = 0,
+        .index_buffer = 0,
+        .vertex_buffer_adress = 0,
+    };
+}
+
+pub fn init(core: *Core) void {
+    const m = gltf.load_meshes(core, "assets/suzanne.glb") catch @panic("Failed to load mesh");
+    core.buffers.meshassets[0] = m.items[0];
+}
+
+pub fn deinit(core: *Core) void {
+    _ = core;
 }

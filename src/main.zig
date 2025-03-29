@@ -1,6 +1,6 @@
 const std = @import("std");
-const graphics = @import("vulkan/core.zig");
-const c = @import("clibs");
+const vulkanbackend = @import("vulkan/core.zig");
+const loop = @import("gameloop.zig");
 const Window = @import("window.zig");
 
 pub fn main() !void {
@@ -8,5 +8,7 @@ pub fn main() !void {
 
     var window : Window = .init(1200,1000);
     defer window.deinit();
-    graphics.run(allocator, &window);
+    var engine : vulkanbackend = .init(allocator, &window);
+    defer engine.deinit();
+    loop.loop(&engine, &window);
 }

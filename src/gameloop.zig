@@ -1,42 +1,38 @@
-const draw = @import("vulkan/draw.zig").draw;
 const std = @import("std");
 const c = @import("clibs");
 const Core = @import("vulkan/core.zig");
 const Window = @import("window.zig");
+const commands = @import("vulkan/commands.zig");
 const log = std.log.scoped(.app);
-const linalg = @import("linalg");
-const Quat = linalg.Quat(f32);
-const Vec3 = linalg.Vec3(f32);
-
-rotations: [3]Quat = undefined,
-positions: [3]Vec3 = undefined,
+const geometry = @import("geometry");
+const yes = @import("vulkan/pipelineinstances/yes.zig");
+const Quat = geometry.Quat(f32);
+const Vec3 = geometry.Vec3(f32);
 
 const Self = @This();
 
-pub fn loop(self: Self, engine: *Core, window: *Window) void {
+pub fn loop(engine: *Core, window: *Window) void {
     var timer = std.time.Timer.start() catch @panic("Failed to start timer");
     var delta: u64 = undefined;
 
-    const camera = 0;
-    const susanne = 1;
-    self.position[camera] = .{ .x = 0, .y = -10, .z = 8 };
-    self.position[susanne] = .{ .x = 0, .y = -10, .z = 8 };
-    engine.camera.rotatePitch(std.math.degreesToRadians(60));
-    engine.camera.rotateYaw(std.math.degreesToRadians(180));
-    engine.camera.rotateRoll(std.math.degreesToRadians(180));
+    var camerarot: Quat = .identity;
+    var camerapos: Vec3 = .zeros;
+    camerarot.rotatePitch(std.math.degreesToRadians(60));
+    camerarot.rotateYaw(std.math.degreesToRadians(180));
+    camerarot.rotateRoll(std.math.degreesToRadians(180));
 
     Window.check_sdl_bool(c.SDL_SetWindowRelativeMouseMode(window.sdl_window, true));
 
     while (!window.state.quit) {
         window.processInput();
-        if (window.state.w) engine.camera.translateForward(0.1);
-        if (window.state.s) engine.camera.translateForward(-0.1);
-        if (window.state.a) engine.camera.translatePitch(-0.1);
-        if (window.state.d) engine.camera.translatePitch(0.1);
-        if (window.state.q) engine.camera.translateWorldZ(0.1);
-        if (window.state.e) engine.camera.translateWorldZ(-0.1);
-        engine.camera.rotatePitch(-window.state.mouse_y / 150);
-        engine.camera.rotateWorldZ(-window.state.mouse_x / 150);
+        if (window.state.w) camerapos.translateForward(&camerarot, 0.1);
+        if (window.state.s) camerapos.translateForward(&camerarot, -0.1);
+        if (window.state.a) camerapos.translatePitch(&camerarot, -0.1);
+        if (window.state.d) camerapos.translatePitch(&camerarot, 0.1);
+        if (window.state.q) camerapos.translateWorldZ( 0.1);
+        if (window.state.e) camerapos.translateWorldZ( -0.1);
+        camerarot.rotatePitch(-window.state.mouse_y / 150);
+        camerarot.rotateWorldZ(-window.state.mouse_x / 150);
         if (engine.framenumber % 100 == 0) {
             delta = timer.read();
             log.info("FPS: {d}                        \x1b[1A", .{
@@ -45,9 +41,13 @@ pub fn loop(self: Self, engine: *Core, window: *Window) void {
             timer.reset();
         }
         if (engine.resizerequest) {
-            window.get_size(&engine.extents2d[0].width, &engine.extents2d[0].height);
-            engine.swapchain.resize(engine, engine.extents2d[0]);
+            window.get_size(&engine.images.swapchain_extent.width, &engine.images.swapchain_extent.height);
+            engine.swapchain.resize(engine, engine.images.swapchain_extent);
         }
-        draw(engine);
+        var frame = engine.framecontexts.frames[engine.framecontexts.current];
+        frame.submitBegin(engine);
+        yes.draw(engine, &frame);
+        yes.drawMesh(engine, &frame);
+        frame.submitEnd(engine);
     }
 }

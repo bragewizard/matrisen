@@ -3,20 +3,20 @@ const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.device);
+const Core = @import("core.zig");
 const config = @import("config");
 const SwapchainSupportInfo = @import("swapchain.zig").SupportInfo;
 const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
 const api_version = @import("instance.zig").api_version;
-const required_device_extensions: []const [*c]const u8 = &.{
-    "VK_KHR_swapchain",
-    "VK_EXT_mesh_shader"
-};
+const required_device_extensions: []const [*c]const u8 = &.{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
 
 const PhysicalDeviceSelectionCriteria = enum {
     First,
     PreferDiscrete,
     PreferIntegrated,
 };
+
+pub var vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = undefined;
 
 pub const PhysicalDevice = struct {
     handle: c.VkPhysicalDevice = null,
@@ -28,19 +28,22 @@ pub const PhysicalDevice = struct {
 
     const INVALID_QUEUE_FAMILY_INDEX = std.math.maxInt(u32);
 
-    pub fn select(alloc: std.mem.Allocator, instance: c.VkInstance, surface: ?c.VkSurfaceKHR) PhysicalDevice {
+    pub fn select(core: *Core, alloc: std.mem.Allocator) void {
         const criteria = PhysicalDeviceSelectionCriteria.PreferDiscrete;
         var physical_device_count: u32 = undefined;
-        check_vk_panic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, null));
+        check_vk_panic(c.vkEnumeratePhysicalDevices(core.instance.handle, &physical_device_count, null));
 
-        const physical_devices = alloc.alloc(c.VkPhysicalDevice, physical_device_count) catch { log.err("failed to alloc", .{}); @panic(""); };
-        check_vk_panic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.ptr));
+        const physical_devices = alloc.alloc(c.VkPhysicalDevice, physical_device_count) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
+        check_vk_panic(c.vkEnumeratePhysicalDevices(core.instance.handle, &physical_device_count, physical_devices.ptr));
 
         var suitable_pd: ?PhysicalDevice = null;
 
         for (physical_devices) |device| {
-            const pd = make_physical_device(alloc, device, surface) catch continue;
-            _ = is_physical_device_suitable(alloc, pd, surface) catch continue;
+            const pd = make_physical_device(alloc, device, core.surface) catch continue;
+            _ = is_physical_device_suitable(alloc, pd, core.surface) catch continue;
             switch (criteria) {
                 PhysicalDeviceSelectionCriteria.First => {
                     suitable_pd = pd;
@@ -74,7 +77,7 @@ pub const PhysicalDevice = struct {
         const device_name = @as([*:0]const u8, @ptrCast(@alignCast(res.properties.deviceName[0..])));
         log.info("Selected physical device: {s}", .{device_name});
 
-        return res;
+        core.physicaldevice = res;
     }
 
     fn make_physical_device(a: std.mem.Allocator, device: c.VkPhysicalDevice, surface: ?c.VkSurfaceKHR) !PhysicalDevice {
@@ -88,7 +91,10 @@ pub const PhysicalDevice = struct {
 
         var queue_family_count: u32 = undefined;
         c.vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, null);
-        const queue_families = a.alloc(c.VkQueueFamilyProperties, queue_family_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+        const queue_families = a.alloc(c.VkQueueFamilyProperties, queue_family_count) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
         defer a.free(queue_families);
         c.vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.ptr);
 
@@ -166,7 +172,10 @@ pub const PhysicalDevice = struct {
         if (required_device_extensions.len > 0) {
             var device_extension_count: u32 = undefined;
             check_vk_panic(c.vkEnumerateDeviceExtensionProperties(device.handle, null, &device_extension_count, null));
-            const device_extensions = alloc.alloc(c.VkExtensionProperties, device_extension_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+            const device_extensions = alloc.alloc(c.VkExtensionProperties, device_extension_count) catch {
+                log.err("failed to alloc", .{});
+                @panic("");
+            };
             check_vk_panic(c.vkEnumerateDeviceExtensionProperties(device.handle, null, &device_extension_count, device_extensions.ptr));
 
             _ = blk: for (required_device_extensions) |req_ext| {
@@ -190,7 +199,7 @@ pub const Device = struct {
     compute_queue: c.VkQueue = null,
     transfer_queue: c.VkQueue = null,
 
-    pub fn create(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Device {
+    pub fn init(core: *Core, alloc: std.mem.Allocator) void {
         const alloc_cb: ?*c.VkAllocationCallbacks = null;
 
         var features13 = std.mem.zeroInit(c.VkPhysicalDeviceVulkan13Features, .{
@@ -217,7 +226,7 @@ pub const Device = struct {
             .pNext = &shader_draw_parameters_features,
         });
 
-        const meshshading = c.VkPhysicalDeviceMeshShaderFeaturesEXT {
+        const meshshading = c.VkPhysicalDeviceMeshShaderFeaturesEXT{
             .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
             .pNext = &deviceFeatures2,
             .taskShader = c.VK_TRUE,
@@ -227,19 +236,37 @@ pub const Device = struct {
         var queue_create_infos = std.ArrayListUnmanaged(c.VkDeviceQueueCreateInfo){};
         const queue_priorities: f32 = 1.0;
         var queue_family_set = std.AutoArrayHashMapUnmanaged(u32, void){};
-        queue_family_set.put(alloc, physical_device.graphics_queue_family, {}) catch { log.err("failed to alloc", .{}); @panic(""); };
-        queue_family_set.put(alloc, physical_device.present_queue_family, {}) catch { log.err("failed to alloc", .{}); @panic(""); };
-        queue_family_set.put(alloc, physical_device.compute_queue_family, {}) catch { log.err("failed to alloc", .{}); @panic(""); };
-        queue_family_set.put(alloc, physical_device.transfer_queue_family, {}) catch { log.err("failed to alloc", .{}); @panic(""); };
+        queue_family_set.put(alloc, core.physicaldevice.graphics_queue_family, {}) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
+        queue_family_set.put(alloc, core.physicaldevice.present_queue_family, {}) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
+        queue_family_set.put(alloc, core.physicaldevice.compute_queue_family, {}) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
+        queue_family_set.put(alloc, core.physicaldevice.transfer_queue_family, {}) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
         var qfi_iter = queue_family_set.iterator();
-        queue_create_infos.ensureTotalCapacity(alloc, queue_family_set.count()) catch { log.err("failed to alloc", .{}); @panic(""); };
+        queue_create_infos.ensureTotalCapacity(alloc, queue_family_set.count()) catch {
+            log.err("failed to alloc", .{});
+            @panic("");
+        };
         while (qfi_iter.next()) |qfi| {
             queue_create_infos.append(alloc, std.mem.zeroInit(c.VkDeviceQueueCreateInfo, .{
                 .sType = c.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 .queueFamilyIndex = qfi.key_ptr.*,
                 .queueCount = 1,
                 .pQueuePriorities = &queue_priorities,
-            })) catch { log.err("failed to append", .{}); @panic(""); };
+            })) catch {
+                log.err("failed to append", .{});
+                @panic("");
+            };
         }
 
         const device_info = std.mem.zeroInit(c.VkDeviceCreateInfo, .{
@@ -255,23 +282,28 @@ pub const Device = struct {
         });
 
         var device: c.VkDevice = undefined;
-        check_vk_panic(c.vkCreateDevice(physical_device.handle, &device_info, alloc_cb, &device));
+        check_vk_panic(c.vkCreateDevice(core.physicaldevice.handle, &device_info, alloc_cb, &device));
 
         var graphics_queue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(device, physical_device.graphics_queue_family, 0, &graphics_queue);
+        c.vkGetDeviceQueue(device, core.physicaldevice.graphics_queue_family, 0, &graphics_queue);
         var present_queue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(device, physical_device.present_queue_family, 0, &present_queue);
+        c.vkGetDeviceQueue(device, core.physicaldevice.present_queue_family, 0, &present_queue);
         var compute_queue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(device, physical_device.compute_queue_family, 0, &compute_queue);
+        c.vkGetDeviceQueue(device, core.physicaldevice.compute_queue_family, 0, &compute_queue);
         var transfer_queue: c.VkQueue = undefined;
-        c.vkGetDeviceQueue(device, physical_device.transfer_queue_family, 0, &transfer_queue);
+        c.vkGetDeviceQueue(device, core.physicaldevice.transfer_queue_family, 0, &transfer_queue);
 
-        return .{
-            .handle = device,
-            .graphics_queue = graphics_queue,
-            .present_queue = present_queue,
-            .compute_queue = compute_queue,
-            .transfer_queue = transfer_queue,
-        };
+        // TODO fix this ugly ahh pointer thing
+        const procAddr: c.PFN_vkCmdDrawMeshTasksEXT = @ptrCast(c.vkGetDeviceProcAddr(device, "vkCmdDrawMeshTasksEXT"));
+        if (procAddr == null) {
+            @panic("");
+        }
+        vkCmdDrawMeshTasksEXT = procAddr;
+
+        core.device.handle = device;
+        core.device.graphics_queue = graphics_queue;
+        core.device.present_queue = present_queue;
+        core.device.compute_queue = compute_queue;
+        core.device.transfer_queue = transfer_queue;
     }
 };

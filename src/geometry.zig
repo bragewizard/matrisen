@@ -108,50 +108,50 @@ pub fn Vec3(comptime T: type) type {
         }
 
         pub fn translateInWorldframe(self: *Self, direction: Vec3(T)) void {
-            self.position = self.position.add(direction);
+            self = self.position.add(direction);
         }
 
-        pub fn translateLocalframe(self: *Self, direction: Vec3(T)) void {
-            const local_rotation = self.rotation.rotateVector3(direction);
-            self.position = self.position.add(local_rotation);
+        pub fn translateLocalframe(self: *Self, rot: Quat(T), direction: Vec3(T)) void {
+            const local_rotation = rot.rotateVector3(direction);
+            self = self.add(local_rotation);
         }
 
         pub fn translateWorldX(self: *Self, amount: T) void {
-            self.position = Vec3(T).of(self.position.x + amount, self.position.y, self.position.z);
+            self.x += amount;
         }
 
         pub fn translateWorldY(self: *Self, amount: T) void {
-            self.position = Vec3(T).of(self.position.x, self.position.y + amount, self.position.z);
+            self.y += amount;
         }
 
         pub fn translateWorldZ(self: *Self, amount: T) void {
-            self.position = Vec3(T).of(self.position.x, self.position.y, self.position.z + amount);
+            self.z += amount;
         }
 
-        pub fn translatePitch(self: *Self, rot: Quat(T), amount: T) void {
-            var localx = rot.pitchAxis(self);
+        pub fn translatePitch(self: *Self, rot: *Quat(T), amount: T) void {
+            var localx = rot.pitchAxis();
             localx = localx.scalarMul(amount);
-            self.position = self.position.add(localx);
+            self.* = self.add(localx);
         }
 
-        pub fn translateYaw(self: *Self, rot: Quat(T), amount: T) void {
-            var localx = rot.yawAxis(self);
+        pub fn translateYaw(self: *Self, rot: *Quat(T), amount: T) void {
+            var localx = rot.yawAxis();
             localx = localx.scalarMul(amount);
-            self.position = self.position.add(localx);
+            self.* = self.add(localx);
         }
 
-        pub fn translateRoll(self: *Self, rot: Quat(T), amount: T) void {
-            var localx = rot.rollAxis(self);
+        pub fn translateRoll(self: *Self, rot: *Quat(T), amount: T) void {
+            var localx = rot.rollAxis();
             localx = localx.scalarMul(amount);
-            self.position = self.position.add(localx);
+            self.* = self.add(localx);
         }
 
-        pub fn translateForward(self: *Self, rot: Quat(T), amount: T) void {
-            var local = rot.rollAxis(self);
+        pub fn translateForward(self: *Self, rot: *Quat(T), amount: T) void {
+            var local = rot.rollAxis();
             local.z = 0;
             local = local.normalized();
             local = local.scalarMul(amount);
-            self.position = self.position.add(local);
+            self.* = self.add(local);
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -579,7 +579,7 @@ pub fn Quat(comptime T: type) type {
             return .{ .x = pitch, .y = roll, .z = yaw };
         }
 
-        pub fn pitchAxis(self: *Self(T)) Vec3(T) {
+        pub fn pitchAxis(self: *Self) Vec3(T) {
             return self.rotateVec3(Vec3(T).unit_x);
         }
 
@@ -593,42 +593,42 @@ pub fn Quat(comptime T: type) type {
 
         pub fn rotatePitch(self: *Self, angle: T) void {
             const rotation = Quat(T).aroundAxis(Vec3(T).unit_x, angle);
-            self = self.mul(rotation);
+            self.* = self.mul(rotation);
         }
 
         pub fn rotateYaw(self: *Self, angle: T) void {
             const rotation = Quat(T).aroundAxis(Vec3(T).unit_y, angle);
-            self = self.mul(rotation);
+            self.* = self.mul(rotation);
         }
 
         pub fn rotateRoll(self: *Self, angle: T) void {
             const rotation = Quat(T).aroundAxis(Vec3(T).unit_z, angle);
-            self = self.mul(rotation);
+            self.* = self.mul(rotation);
         }
 
         pub fn rotateWorldX(self: *Self, angle: T) void {
             const rotation = Quat(T).aroundAxis(Vec3(T).unit_x, angle);
-            self = rotation.mul(self);
+            self.* = rotation.mul(self);
         }
 
         pub fn rotateWorldY(self: *Self, angle: T) void {
             const rotation = Quat(T).aroundAxis(Vec3(T).unit_y, angle);
-            self = rotation.mul(self);
+            self.* = rotation.mul(self);
         }
 
         pub fn rotateWorldZ(self: *Self, angle: T) void {
             const rotation = Quat(T).aroundAxis(Vec3(T).unit_z, angle);
-            self = rotation.mul(self);
+            self.* = rotation.mul(self.*);
         }
 
         pub fn rotateWorld(self: *Self, axis: Vec3(T), angle: T) void {
             const rotation = Quat(T).aroundAxis(axis, angle);
-            self = rotation.mul(self);
+            self.* = rotation.mul(self);
         }
 
         pub fn rotateLocal(self: *Self, axis: Vec3(T), angle: T) void {
             const rotation = Quat(T).aroundAxis(axis, angle);
-            self = self.mul(rotation);
+            self.* = self.mul(rotation);
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {

@@ -5,9 +5,10 @@
     .minimum_zig_version = "0.14.0-dev.3460+6d29ef0ba",
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/<commit SHA>.tar.gz",
-            .hash = "<dependency hash>",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/refs/heads/master.tar.gz",
+            .hash = "vulkan-0.0.0-r7Ytx1JTAwC3R0cfA3SxaWPGJa6p3EUw3OTXTgSPr_hF",
         },
+        .truetype = .{ .path = "../TrueType" },
     },
     .paths = .{
         "build.zig",

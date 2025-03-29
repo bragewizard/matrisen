@@ -5,7 +5,7 @@ const builtin = @import("builtin");
 pub fn build(b: *Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    // options
+
     const options = b.addOptions();
     const version_opt = b.option(
         []const u8,
@@ -22,7 +22,6 @@ pub fn build(b: *Build) !void {
     };
     options.addOption([]const u8, "version", version_opt);
 
-    // exe
     const exe = b.addExecutable(.{
         .name = "matrisen",
         .root_source_file = b.path("src/main.zig"),
@@ -43,7 +42,6 @@ pub fn build(b: *Build) !void {
     compile_all_shaders(b, exe);
     b.installArtifact(exe);
 
-    // run
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
 
@@ -53,46 +51,52 @@ pub fn build(b: *Build) !void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    // =============================== MODULES =======================================
+    const geometry = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/geometry.zig"),
+    });
+    exe.root_module.addImport("geometry", geometry);
 
-    const linalg = b.createModule(
-        .{ .target = target, .optimize = optimize, .root_source_file = b.path("src/linalg.zig") },
-    );
-    const clibs = b.createModule(
-        .{ .target = target, .optimize = optimize, .root_source_file = b.path("src/clibs.zig") },
-    );
-    const bench = b.createModule(
-        .{ .target = target, .optimize = optimize, .root_source_file = b.path("benchmarking.zig") },
-    );
+    // const pipelines = b.createModule(.{
+    //     .target = target,
+    //     .optimize = optimize,
+    //     .root_source_file = b.path("src/vulkan/pipelines.zig"),
+    // });
+    // exe.root_module.addImport("pipelines", pipelines);
 
-    // test step --------------------------------------
+    const clibs = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/clibs.zig"),
+    });
+    exe.root_module.addImport("clibs", clibs);
+
+    const bench = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("benchmarking.zig"),
+    });
 
     const test_step = b.step("test", "Run unit tests");
-    const unittest = b.addTest(.{ .root_module = linalg });
+    const unittest = b.addTest(.{ .root_module = geometry });
     const run_test = b.addRunArtifact(unittest);
-    // add more tests here ...
     test_step.dependOn(&run_test.step);
-    // add them as dependencies aswell ...
 
-    // bench step ---------------------------------
-    const bench_linalg = b.addExecutable(.{
-        .name = "bench-linalg",
-        .root_source_file = b.path("src/linalg.zig"),
+    const bench_geometry = b.addExecutable(.{
+        .name = "bench-geometry",
+        .root_source_file = b.path("src/geometry.zig"),
         .target = target,
         .optimize = optimize,
     });
-    const install_bench = b.addInstallArtifact(bench_linalg, .{});
-    const run_bench = b.addRunArtifact(bench_linalg);
+    const install_bench = b.addInstallArtifact(bench_geometry, .{});
+    const run_bench = b.addRunArtifact(bench_geometry);
     const bench_step = b.step("bench", "Run the bench");
     bench_step.dependOn(&run_bench.step);
     bench_step.dependOn(&install_bench.step);
 
-    // imports -------------------------------------
-
-    exe.root_module.addImport("linalg", linalg);
-    exe.root_module.addImport("clibs", clibs);
-    bench_linalg.root_module.addImport("benchmarking", bench);
-    bench_linalg.root_module.addImport("linalg", linalg);
+    bench_geometry.root_module.addImport("benchmarking", bench);
+    bench_geometry.root_module.addImport("geometry", geometry);
 }
 
 fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
@@ -138,33 +142,3 @@ fn add_shader(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) voi
     shader_compilation.expectStdOutEqual(result);
     exe.root_module.addAnonymousImport(name, .{ .root_source_file = output });
 }
-
-// var tests_dir = try b.build_root.handle.openDir("src", .{ .iterate = true });
-// defer tests_dir.close();
-// var walker = try tests_dir.walk(b.allocator);
-// defer walker.deinit();
-
-// while (try walker.next()) |entry| {
-//     if (entry.kind == .file and std.mem.endsWith(u8, entry.basename, ".zig")) {
-//         const file_name = entry.basename[0 .. entry.basename.len - 4]; // Strip .zig
-//         var buf: [100]u8 = undefined;
-//         const file_path = try std.fmt.bufPrint(&buf, "src/{s}", .{entry.path});
-//         const module = b.addModule(file_name, .{
-//             .root_source_file = b.path(file_path),
-//             .target = target,
-//             .optimize = optimize,
-//         });
-//         module.addImport("linalg", linalg_mod);
-//         module.addImport("clibs", clibs_mod);
-//         module.addImport("benchmarking", bench_mod);
-//         const unittest = b.addTest(.{ .root_module = module });
-
-//         // Optional: Add filter directly in build.zig
-//         // if (b.option([]const u8, "test-filter", "Filter to apply to tests")) |filter| {
-//         //     unittest.filters = filter;
-//         // }
-//         unittest.linkLibC();
-//         const run_unittest = b.addRunArtifact(unittest);
-//         test_step.dependOn(&run_unittest.step);
-//     }
-// }

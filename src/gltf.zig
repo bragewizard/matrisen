@@ -1,11 +1,9 @@
 const std = @import("std");
-const Buf = @import("buffer.zig");
-const engine = @import("core.zig");
-const Vertex = @import("buffer.zig").Vertex;
-const linalg = @import("linalg");
-const Mat4 = linalg.Mat4;
-const Vec3 = linalg.Vec3;
-const Quat = linalg.Quat;
+const engine = @import("vulkan/core.zig");
+const geometry = @import("geometry");
+const Mat4 = geometry.Mat4;
+const Vec3 = geometry.Vec3;
+const Quat = geometry.Quat;
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.assetloader);
@@ -14,10 +12,12 @@ const math = std.math;
 const json = std.json;
 const fmt = std.fmt;
 const assert = std.debug.assert;
+const upload_mesh = @import("vulkan/buffers.zig").upload_mesh;
 const ArenaAllocator = std.heap.ArenaAllocator;
-const MeshBuffers = @import("buffer.zig").MeshBuffers;
-const MeshAsset = @import("buffer.zig").MeshAsset;
-const GeoSurface = @import("buffer.zig").GeoSurface;
+const Vertex = @import("vulkan/buffers.zig").Vertex;
+const MeshBuffers = @import("vulkan/buffers.zig").MeshBuffers;
+const MeshAsset = @import("vulkan/buffers.zig").MeshAsset;
+const GeoSurface = @import("vulkan/buffers.zig").GeoSurface;
 
 const Self = @This();
 arena: *ArenaAllocator,
@@ -427,7 +427,6 @@ pub fn load_meshes(eng: *engine, path: []const u8) !ArrayList(MeshAsset) {
     }
     for (gltf.data.meshes.items) |mesh| {
         var new_mesh: MeshAsset = .{
-            .name = mesh.name,
             .surfaces = ArrayList(GeoSurface).init(allocator),
         };
 
@@ -503,7 +502,7 @@ pub fn load_meshes(eng: *engine, path: []const u8) !ArrayList(MeshAsset) {
             }
             try new_mesh.surfaces.append(new_surface);
         }
-        new_mesh.mesh_buffers = Buf.upload_mesh(eng, indices.items, vertices.items);
+        new_mesh.mesh_buffers = upload_mesh(eng, indices.items, vertices.items);
         try meshes.append(new_mesh);
     }
     return meshes;

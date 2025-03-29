@@ -1,5 +1,6 @@
 const c = @import("clibs");
 const std = @import("std");
+const Core = @import("core.zig");
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.instance);
@@ -10,7 +11,7 @@ const Instance = @This();
 handle: c.VkInstance = null,
 debug_messenger: c.VkDebugUtilsMessengerEXT = null,
 
-pub fn create(alloc: std.mem.Allocator) Instance {
+pub fn init(core: *Core, alloc: std.mem.Allocator) void {
     var sdl_required_extension_count: u32 = undefined;
     const sdl_extensions = c.SDL_Vulkan_GetInstanceExtensions(&sdl_required_extension_count);
     const sdl_extension_slice = sdl_extensions[0..sdl_required_extension_count];
@@ -101,7 +102,8 @@ pub fn create(alloc: std.mem.Allocator) Instance {
     else
         null;
 
-    return .{ .handle = instance, .debug_messenger = debug_messenger };
+    core.instance.handle = instance;
+    core.instance.debug_messenger = debug_messenger;
 }
 
 pub fn get_destroy_debug_utils_messenger_fn(instance: Instance) c.PFN_vkDestroyDebugUtilsMessengerEXT {
