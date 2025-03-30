@@ -215,6 +215,7 @@ pub const FrameContext = struct {
         };
         _ = c.vkQueuePresentKHR(core.device.graphics_queue, &present_info);
         core.framenumber +%= 1;
+        core.framecontexts.switch_frame();
     }
 };
 
@@ -282,7 +283,6 @@ pub const FrameContexts = struct {
             c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
             frame.descriptors.deinit(core.device.handle);
-            std.debug.print("remove here\n", .{});
             frame.flush(core);
         }
     }

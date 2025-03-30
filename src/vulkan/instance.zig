@@ -28,12 +28,18 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
     // Get supported layers and extensions
     var layer_count: u32 = undefined;
     check_vk_panic(c.vkEnumerateInstanceLayerProperties(&layer_count, null));
-    const layer_props = alloc.alloc(c.VkLayerProperties, layer_count) catch { log.err("failed to alloc", .{}); @panic(""); };
+    const layer_props = alloc.alloc(c.VkLayerProperties, layer_count) catch {
+        log.err("failed to alloc", .{});
+        @panic("");
+    };
     check_vk_panic(c.vkEnumerateInstanceLayerProperties(&layer_count, layer_props.ptr));
 
     var extension_count: u32 = undefined;
     check_vk_panic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, null));
-    const extension_props = alloc.alloc(c.VkExtensionProperties, extension_count) catch { log.err("failed to append", .{}); @panic(""); };
+    const extension_props = alloc.alloc(c.VkExtensionProperties, extension_count) catch {
+        log.err("failed to append", .{});
+        @panic("");
+    };
     check_vk_panic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, extension_props.ptr));
 
     // Check if the validation layer is supported
@@ -43,7 +49,10 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
             const layer_name: [*c]const u8 = @ptrCast(layer_prop.layerName[0..]);
             const validation_layer_name: [*c]const u8 = "VK_LAYER_KHRONOS_validation";
             if (std.mem.eql(u8, std.mem.span(validation_layer_name), std.mem.span(layer_name))) {
-                layers.append(alloc, validation_layer_name) catch { log.err("failed to append", .{}); @panic(""); };
+                layers.append(alloc, validation_layer_name) catch {
+                    log.err("failed to append", .{});
+                    @panic("");
+                };
                 break :blk true;
             }
         } else false;
@@ -64,7 +73,10 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
 
     for (required_extensions) |required_ext| {
         if (ExtensionFinder.find(required_ext, extension_props)) {
-            extensions.append(alloc, required_ext) catch { log.err("failed to append", .{}); @panic(""); };
+            extensions.append(alloc, required_ext) catch {
+                log.err("failed to append", .{});
+                @panic("");
+            };
         } else {
             log.err("Required vulkan extension not supported: {s}", .{required_ext});
             @panic("");
@@ -72,19 +84,31 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
     }
 
     if (debug and ExtensionFinder.find("VK_EXT_debug_utils", extension_props)) {
-        extensions.append(alloc, "VK_EXT_debug_utils") catch { log.err("failed to append", .{}); @panic(""); };
+        extensions.append(alloc, "VK_EXT_debug_utils") catch {
+            log.err("failed to append", .{});
+            @panic("");
+        };
     } else {
         debug = false;
     }
 
-    const app_info : c.VkApplicationInfo = .{
+    if (debug and ExtensionFinder.find("VK_EXT_device_address_binding_report", extension_props)) {
+        extensions.append(alloc, "VK_EXT_device_address_binding_report") catch {
+            log.err("failed to append", .{});
+            @panic("");
+        };
+    } else {
+        debug = false;
+    }
+
+    const app_info: c.VkApplicationInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .apiVersion = api_version,
         .pApplicationName = engine_name,
         .pEngineName = engine_name,
     };
 
-    const instance_info : c.VkInstanceCreateInfo = .{
+    const instance_info: c.VkInstanceCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &app_info,
         .enabledLayerCount = @as(u32, @intCast(layers.items.len)),
@@ -152,7 +176,11 @@ fn get_vulkan_instance_funct(comptime Fn: type, instance: c.VkInstance, name: [*
     @panic("SDL_Vulkan_GetVkGetInstanceProcAddr returned null");
 }
 
-fn create_debug_callback(instance: c.VkInstance, debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT, alloc_cb: ?*c.VkAllocationCallbacks) c.VkDebugUtilsMessengerEXT {
+fn create_debug_callback(
+    instance: c.VkInstance,
+    debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT,
+    alloc_cb: ?*c.VkAllocationCallbacks,
+) c.VkDebugUtilsMessengerEXT {
     const create_fn_opt = get_vulkan_instance_funct(c.PFN_vkCreateDebugUtilsMessengerEXT, instance, "vkCreateDebugUtilsMessengerEXT");
     if (create_fn_opt) |create_fn| {
         const create_info = std.mem.zeroInit(c.VkDebugUtilsMessengerCreateInfoEXT, .{

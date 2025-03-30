@@ -45,12 +45,11 @@ pub fn loop(engine: *Core, window: *Window) void {
             window.get_size(&engine.images.swapchain_extent.width, &engine.images.swapchain_extent.height);
             Swapchain.resize(engine);
         }
-        var frame = engine.framecontexts.frames[engine.framecontexts.current];
+        var frame = &engine.framecontexts.frames[engine.framecontexts.current];
         frame.submitBegin(engine);
-        setSceneData(engine, &frame, camerarot.view(camerapos));
-        engine.pipelines.pbr.draw(engine, &frame);
-        engine.pipelines.meshshader.draw(engine, &frame);
+        setSceneData(engine, frame, camerarot.view(camerapos));
+        engine.pipelines.pbr.draw(engine, frame);
+        engine.pipelines.meshshader.draw(engine, frame);
         frame.submitEnd(engine);
-        engine.framecontexts.switch_frame();
     }
 }
