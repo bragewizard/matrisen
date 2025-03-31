@@ -2,7 +2,7 @@ const std = @import("std");
 const c = @import("clibs");
 const Core = @import("vulkan/core.zig");
 const Swapchain = @import("vulkan/swapchain.zig");
-const setSceneData = @import("vulkan/pipelines/root.zig").setSceneData;
+const uploadSceneData = @import("vulkan/buffers.zig").uploadSceneData;
 const Window = @import("window.zig");
 const commands = @import("vulkan/commands.zig");
 const log = std.log.scoped(.app);
@@ -23,6 +23,7 @@ pub fn loop(engine: *Core, window: *Window) void {
     camerarot.rotateRoll(std.math.degreesToRadians(180));
 
     Window.check_sdl_bool(c.SDL_SetWindowRelativeMouseMode(window.sdl_window, true));
+    window.state.capture_mouse = true;
 
     while (!window.state.quit) {
         window.processInput();
@@ -30,8 +31,8 @@ pub fn loop(engine: *Core, window: *Window) void {
         if (window.state.s) camerapos.translateForward(&camerarot, -0.1);
         if (window.state.a) camerapos.translatePitch(&camerarot, -0.1);
         if (window.state.d) camerapos.translatePitch(&camerarot, 0.1);
-        if (window.state.q) camerapos.translateWorldZ(0.1);
-        if (window.state.e) camerapos.translateWorldZ(-0.1);
+        if (window.state.q) camerapos.translateWorldZ(-0.1);
+        if (window.state.e) camerapos.translateWorldZ(0.1);
         camerarot.rotatePitch(-window.state.mouse_y / 150);
         camerarot.rotateWorldZ(-window.state.mouse_x / 150);
         if (engine.framenumber % 100 == 0) {
@@ -44,12 +45,14 @@ pub fn loop(engine: *Core, window: *Window) void {
         if (engine.resizerequest) {
             window.get_size(&engine.images.swapchain_extent.width, &engine.images.swapchain_extent.height);
             Swapchain.resize(engine);
+            continue;
         }
         var frame = &engine.framecontexts.frames[engine.framecontexts.current];
-        frame.submitBegin(engine);
-        setSceneData(engine, frame, camerarot.view(camerapos));
+        frame.submitBegin(engine) catch continue;
+        uploadSceneData(engine, frame, camerarot.view(camerapos));
         engine.pipelines.pbr.draw(engine, frame);
         engine.pipelines.meshshader.draw(engine, frame);
+        engine.pipelines.shapes.draw(engine, frame);
         frame.submitEnd(engine);
     }
 }

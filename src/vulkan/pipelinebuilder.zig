@@ -132,6 +132,15 @@ pub fn set_multisampling_none(self: *Self) void {
     self.multisample.alphaToOneEnable = c.VK_FALSE;
 }
 
+pub fn setMultisampling4(self: *Self) void {
+    self.multisample.rasterizationSamples = c.VK_SAMPLE_COUNT_4_BIT;
+    self.multisample.sampleShadingEnable = c.VK_FALSE;
+    self.multisample.minSampleShading = 1.0;
+    self.multisample.pSampleMask = null;
+    self.multisample.alphaToCoverageEnable = c.VK_FALSE;
+    self.multisample.alphaToOneEnable = c.VK_FALSE;
+}
+
 pub fn disable_blending(self: *Self) void {
     self.color_blend_attachment.blendEnable = c.VK_FALSE;
     self.color_blend_attachment.colorWriteMask =

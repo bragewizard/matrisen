@@ -2,6 +2,7 @@ const c = @import("clibs");
 const std = @import("std");
 const debug = @import("debug.zig");
 const Core = @import("core.zig");
+const Images = @import("images.zig");
 const alloc_cb = @import("core.zig").vkallocationcallbacks;
 const log = std.log.scoped(.swapchain);
 
@@ -241,7 +242,17 @@ pub fn resize(core: *Core) void {
         @panic("Failed to wait for device idle");
     };
     deinit(core);
+    c.vmaDestroyImage(core.gpuallocator, core.images.colorattachment.image, core.images.colorattachment.allocation,);
+    c.vkDestroyImageView(core.device.handle, core.images.colorattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.images.resolvedattachment.image, core.images.resolvedattachment.allocation,);
+    c.vkDestroyImageView(core.device.handle, core.images.resolvedattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.images.depthstencilattachment.image, core.images.depthstencilattachment.allocation,);
+    c.vkDestroyImageView(core.device.handle, core.images.depthstencilattachment.views[0], null);
+    for (core.images.swapchain_views) |view| {
+        c.vkDestroyImageView(core.device.handle, view, null);
+    }
     core.swapchain = .{};
     init(core);
+    Images.createRenderAttachments(core);
     core.resizerequest = false;
 }

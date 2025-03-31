@@ -47,8 +47,8 @@ pub fn init(self: *Self, core: *Core) void {
             0,
         );
     }
-    const mesh_code align(4) = @embedFile("simple.mesh.glsl").*;
-    const fragment_code align(4) = @embedFile("simple.frag.glsl").*;
+    const mesh_code align(4) = @embedFile("shapes.mesh.glsl").*;
+    const fragment_code align(4) = @embedFile("shapes.frag.glsl").*;
 
     const mesh_module = PipelineBuilder.createShaderModule(core.device.handle, &mesh_code, vk_alloc_cbs) orelse null;
     const fragment_module = PipelineBuilder.createShaderModule(core.device.handle, &fragment_code, vk_alloc_cbs) orelse null;
@@ -100,7 +100,7 @@ pub fn init(self: *Self, core: *Core) void {
     pipelineBuilder.set_polygon_mode(c.VK_POLYGON_MODE_FILL);
     pipelineBuilder.set_cull_mode(c.VK_CULL_MODE_NONE, c.VK_FRONT_FACE_CLOCKWISE);
     pipelineBuilder.setMultisampling4();
-    pipelineBuilder.disable_blending();
+    pipelineBuilder.enable_blending_alpha();
     pipelineBuilder.enable_depthtest(true, c.VK_COMPARE_OP_LESS);
     pipelineBuilder.set_color_attachment_format(core.images.renderattachmentformat);
     pipelineBuilder.set_depth_format(core.images.depth_format);
@@ -131,11 +131,12 @@ pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
         writer.update_set(core.device.handle, set);
     }
 
-    const view = Mat4x4.identity;
+    var view = Mat4x4.identity;
+    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = 2.0 });
     const model = view;
     var pc: ModelPushConstants = .{
         .model = model,
-        .vertex_buffer = 0,
+        .vertex_buffer = core.buffers.storage[0].address,
     };
 
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeline);

@@ -109,7 +109,7 @@ pub fn init(self: *Self, core: *Core) void {
     pipelineBuilder.set_input_topology(c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.set_polygon_mode(c.VK_POLYGON_MODE_FILL);
     pipelineBuilder.set_cull_mode(c.VK_CULL_MODE_NONE, c.VK_FRONT_FACE_CLOCKWISE);
-    pipelineBuilder.set_multisampling_none();
+    pipelineBuilder.setMultisampling4();
     pipelineBuilder.disable_blending();
     pipelineBuilder.enable_depthtest(true, c.VK_COMPARE_OP_LESS);
 

@@ -7,15 +7,21 @@ const debug = @import("debug.zig");
 const gltf = @import("../gltf.zig");
 const Core = @import("core.zig");
 const AsyncContext = @import("commands.zig").AsyncContext;
+const FrameContext = @import("commands.zig").FrameContext;
+const Mat4x4 = geometry.Mat4x4(f32);
+const shapes = @import("../shapes.zig");
 const commands = @import("commands.zig");
-const Self = @This();
+const common = @import("pipelines/common.zig");
+const SceneDataUniform = common.SceneDataUniform;
 
 uniform: [4]AllocatedBuffer = undefined,
-storage: [4]AllocatedBuffer = undefined,
+storage: [4]StorageBuffer = undefined,
 vertex: [4]AllocatedBuffer = undefined,
 index: [1]AllocatedBuffer = undefined,
 adresses: [2]c.VkDeviceAddress = undefined,
 meshassets: [1]MeshAsset = undefined,
+
+const Self = @This();
 
 pub const AllocatedBuffer = struct {
     buffer: c.VkBuffer,
@@ -35,6 +41,11 @@ pub const MeshBuffers = struct {
     vertex_buffer: AllocatedBuffer,
     index_buffer: AllocatedBuffer,
     vertex_buffer_adress: c.VkDeviceAddress,
+};
+
+pub const StorageBuffer = struct {
+    buffer: AllocatedBuffer,
+    address: c.VkDeviceAddress,
 };
 
 pub const GeoSurface = struct {
@@ -138,9 +149,96 @@ pub fn upload_mesh(core: *Core, indices: []u32, vertices: []Vertex) MeshBuffers 
     };
 }
 
+/// Uploads the given byte slice to a GPU-only Storage Buffer (SSBO).
+/// Assumes the bufferDeviceAddress feature is enabled.
+/// Returns the allocated buffer and its device address.
+pub fn uploadSSBO(core: *Core, data_slice: []const u8) StorageBuffer {
+    const data_size: c.VkDeviceSize = data_slice.len;
+    const ssbo_buffer = create(
+        core,
+        data_size,
+        c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            c.VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+            c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        c.VMA_MEMORY_USAGE_GPU_ONLY, // Optimal for GPU access
+    );
+
+    const staging_buffer = create(
+        core,
+        data_size,
+        c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        c.VMA_MEMORY_USAGE_CPU_ONLY, // Or VMA_MEMORY_USAGE_CPU_TO_GPU
+    );
+    defer c.vmaDestroyBuffer(core.gpuallocator, staging_buffer.buffer, staging_buffer.allocation);
+
+    if (staging_buffer.info.pMappedData) |mapped_data_ptr| {
+        const byte_data_ptr = @as([*]u8, @ptrCast(mapped_data_ptr));
+        const staging_slice = byte_data_ptr[0..data_size];
+        @memcpy(staging_slice, data_slice);
+
+    } else {
+        std.log.err("Failed to map staging buffer for SSBO upload.", .{});
+        @panic("");
+    }
+
+    AsyncContext.submitBegin(core);
+    const copy_region = c.VkBufferCopy{
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = data_size,
+    };
+    const cmd = core.asynccontext.command_buffer;
+    c.vkCmdCopyBuffer(cmd, staging_buffer.buffer, ssbo_buffer.buffer, 1, &copy_region);
+    AsyncContext.submitEnd(core);
+
+    const device_address_info = c.VkBufferDeviceAddressInfo{
+        .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .pNext = null, // Always initialize pNext
+        .buffer = ssbo_buffer.buffer,
+    };
+
+    const address = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
+
+    if (address == 0) {
+        std.log.err("Failed to get buffer device address for SSBO. Is the feature enabled?", .{});
+        c.vmaDestroyBuffer(core.gpuallocator, ssbo_buffer.buffer, ssbo_buffer.allocation);
+        @panic("");
+    }
+    return .{
+        .buffer = ssbo_buffer,
+        .address = address,
+    };
+}
+
+pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4 ) void {
+    frame.allocatedbuffers = create(
+        core,
+        @sizeOf(SceneDataUniform),
+        c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+    );
+    var scene_uniform_data: *SceneDataUniform = @alignCast(@ptrCast(frame.allocatedbuffers.info.pMappedData.?));
+    scene_uniform_data.view = view;
+    scene_uniform_data.proj = Mat4x4.perspective(
+        std.math.degreesToRadians(60.0),
+        @as(f32, @floatFromInt(frame.draw_extent.width)) / @as(f32, @floatFromInt(frame.draw_extent.height)),
+        0.1,
+        1000.0,
+    );
+    scene_uniform_data.viewproj = Mat4x4.mul(scene_uniform_data.proj, scene_uniform_data.view);
+    scene_uniform_data.sunlight_dir = .{ .x = 0.1, .y = 0.1, .z = 1, .w = 1 };
+    scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
+    scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
+}
+
 pub fn init(core: *Core) void {
     const m = gltf.load_meshes(core, "assets/suzanne.glb") catch @panic("Failed to load mesh");
     core.buffers.meshassets[0] = m.items[0];
+
+    const my_line_geom = shapes.Line.new(.{ -20, -20, 0.0 }, .{ -20, 20, 0.0 });
+    const line_array: [6*4]u8 = @bitCast(my_line_geom);
+    const line_geometry_ssbo = uploadSSBO(core, &line_array);
+    core.buffers.storage[0] = line_geometry_ssbo;
 }
 
 pub fn deinit(core: *Core) void {
@@ -150,6 +248,7 @@ pub fn deinit(core: *Core) void {
     };
 
     defer c.vmaDestroyBuffer(core.gpuallocator, self.uniform[0].buffer, self.uniform[0].allocation);
+    defer c.vmaDestroyBuffer(core.gpuallocator, self.storage[0].buffer.buffer, self.storage[0].buffer.allocation);
     defer for (self.meshassets) |mesh| {
         c.vmaDestroyBuffer(core.gpuallocator, mesh.mesh_buffers.vertex_buffer.buffer, mesh.mesh_buffers.vertex_buffer.allocation);
         c.vmaDestroyBuffer(core.gpuallocator, mesh.mesh_buffers.index_buffer.buffer, mesh.mesh_buffers.index_buffer.allocation);

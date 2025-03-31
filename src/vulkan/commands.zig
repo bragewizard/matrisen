@@ -27,9 +27,9 @@ pub const FrameContext = struct {
         c.vmaDestroyBuffer(core.gpuallocator, self.allocatedbuffers.buffer, self.allocatedbuffers.allocation);
     }
 
-    pub fn submitBegin(frame: *FrameContext, core: *Core) void {
+    pub fn submitBegin(frame: *FrameContext, core: *Core) !void {
         const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
-        const images = core.images;
+        const images = &core.images;
         debug.check_vk_panic(c.vkWaitForFences(core.device.handle, 1, &frame.render_fence, c.VK_TRUE, timeout));
 
         const e = c.vkAcquireNextImageKHR(
@@ -42,7 +42,7 @@ pub const FrameContext = struct {
         );
         if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
             core.resizerequest = true;
-            return;
+            return error.SwapchainOutOfDate;
         }
 
         frame.flush(core);
@@ -58,7 +58,7 @@ pub const FrameContext = struct {
         });
 
         var draw_extent: c.VkExtent2D = .{};
-        const render_scale = 0.25;
+        const render_scale = 1;
         draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(
             images.swapchain_extent.width,
             images.swapchain_extent.width,
@@ -70,26 +70,13 @@ pub const FrameContext = struct {
         frame.draw_extent = draw_extent;
 
         debug.check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
-        transition_image(cmd, images.colorattachment.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_GENERAL);
-        const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.02, 0.02, 0.02, 1 } };
-        const clearrange = c.VkImageSubresourceRange{
-            .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
-            .levelCount = 1,
-            .layerCount = 1,
-        };
-        c.vkCmdClearColorImage(cmd, images.colorattachment.image, c.VK_IMAGE_LAYOUT_GENERAL, &clearvalue, 1, &clearrange);
+        const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.03, 0.05, 0.10, 1 } };
 
         transition_image(
             cmd,
-            core.images.colorattachment.image,
-            c.VK_IMAGE_LAYOUT_GENERAL,
-            c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        );
-        transition_image(
-            cmd,
-            core.images.depthstencilattachment.image,
+            images.resolvedattachment.image,
             c.VK_IMAGE_LAYOUT_UNDEFINED,
-            c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         );
 
         const color_attachment: c.VkRenderingAttachmentInfo = .{
@@ -97,17 +84,19 @@ pub const FrameContext = struct {
             .imageView = images.colorattachment.views[0],
             .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
+            .storeOp = c.VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .resolveImageView = images.resolvedattachment.views[0],
+            .resolveImageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .resolveMode = c.VK_RESOLVE_MODE_AVERAGE_BIT,
+            .clearValue = .{ .color = clearvalue },
         };
         const depth_attachment: c.VkRenderingAttachmentInfo = .{
             .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = images.depthstencilattachment.views[0],
             .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
             .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = c.VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue = .{
-                .depthStencil = .{ .depth = 1.0, .stencil = 0.0 },
-            },
+            .storeOp = c.VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .clearValue = .{ .depthStencil = .{ .depth = 1.0, .stencil = 0.0 } },
         };
 
         const render_info: c.VkRenderingInfo = .{
@@ -147,7 +136,7 @@ pub const FrameContext = struct {
         c.vkCmdEndRendering(cmd);
         transition_image(
             cmd,
-            images.colorattachment.image,
+            images.resolvedattachment.image,
             c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         );
@@ -159,7 +148,7 @@ pub const FrameContext = struct {
         );
         copy_image_to_image(
             cmd,
-            images.colorattachment.image,
+            images.resolvedattachment.image,
             images.swapchain[frame.swapchain_image_index],
             frame.draw_extent,
             images.swapchain_extent,

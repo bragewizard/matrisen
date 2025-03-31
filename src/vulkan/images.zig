@@ -18,6 +18,7 @@ samplers: [2]c.VkSampler = undefined,
 renderattachmentformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT,
 depth_format: c.VkFormat = c.VK_FORMAT_D32_SFLOAT,
 colorattachment: AllocatedImage(1) = undefined,
+resolvedattachment: AllocatedImage(1) = undefined,
 depthstencilattachment: AllocatedImage(1) = undefined,
 
 swapchain_format: c.VkFormat = undefined,
@@ -51,12 +52,10 @@ pub fn createRenderAttachments(core: *Core) void {
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
-        .samples = c.VK_SAMPLE_COUNT_1_BIT,
+        .samples = c.VK_SAMPLE_COUNT_4_BIT,
         .tiling = c.VK_IMAGE_TILING_OPTIMAL,
         .usage = c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-            c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            c.VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-            c.VK_IMAGE_USAGE_STORAGE_BIT,
+            c.VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
     };
 
     const draw_image_ai: c.VmaAllocationCreateInfo = .{
@@ -92,6 +91,53 @@ pub fn createRenderAttachments(core: *Core) void {
         Core.vkallocationcallbacks,
         &self.colorattachment.views[0],
     ));
+    const resolved_image_ci: c.VkImageCreateInfo = .{
+        .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = c.VK_IMAGE_TYPE_2D,
+        .format = self.renderattachmentformat,
+        .extent = extent,
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = c.VK_SAMPLE_COUNT_1_BIT,
+        .tiling = c.VK_IMAGE_TILING_OPTIMAL,
+        .usage = c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            c.VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    };
+
+    const resolved_image_ai: c.VmaAllocationCreateInfo = .{
+        .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    };
+
+    check_vk_panic(c.vmaCreateImage(
+        core.gpuallocator,
+        &resolved_image_ci,
+        &resolved_image_ai,
+        &self.resolvedattachment.image,
+        &self.resolvedattachment.allocation,
+        null,
+    ));
+    const resolved_view_ci: c.VkImageViewCreateInfo = .{
+        .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = self.resolvedattachment.image,
+        .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
+        .format = self.renderattachmentformat,
+        .subresourceRange = .{
+            .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+
+    check_vk_panic(c.vkCreateImageView(
+        core.device.handle,
+        &resolved_view_ci,
+        Core.vkallocationcallbacks,
+        &self.resolvedattachment.views[0],
+    ));
 
     const depth_extent = extent;
     const depth_image_ci: c.VkImageCreateInfo = .{
@@ -101,11 +147,10 @@ pub fn createRenderAttachments(core: *Core) void {
         .extent = depth_extent,
         .mipLevels = 1,
         .arrayLayers = 1,
-        .samples = c.VK_SAMPLE_COUNT_1_BIT,
+        .samples = c.VK_SAMPLE_COUNT_4_BIT,
         .tiling = c.VK_IMAGE_TILING_OPTIMAL,
         .usage = c.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-            c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            c.VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            c.VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
     };
 
     check_vk_panic(c.vmaCreateImage(
@@ -209,6 +254,8 @@ pub fn deinit(core: *Core) void {
     const self = &core.images;
     c.vmaDestroyImage(core.gpuallocator, self.colorattachment.image, self.colorattachment.allocation);
     c.vkDestroyImageView(core.device.handle, self.colorattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, self.resolvedattachment.image, self.resolvedattachment.allocation);
+    c.vkDestroyImageView(core.device.handle, self.resolvedattachment.views[0], null);
     c.vmaDestroyImage(core.gpuallocator, self.depthstencilattachment.image, self.depthstencilattachment.allocation);
     c.vkDestroyImageView(core.device.handle, self.depthstencilattachment.views[0], null);
     c.vmaDestroyImage(core.gpuallocator, self.textures[0].image, self.textures[0].allocation);
