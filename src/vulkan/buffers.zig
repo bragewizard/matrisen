@@ -9,7 +9,6 @@ const Core = @import("core.zig");
 const AsyncContext = @import("commands.zig").AsyncContext;
 const FrameContext = @import("commands.zig").FrameContext;
 const Mat4x4 = geometry.Mat4x4(f32);
-const shapes = @import("../shapes.zig");
 const commands = @import("commands.zig");
 const common = @import("pipelines/common.zig");
 const SceneDataUniform = common.SceneDataUniform;
@@ -35,6 +34,21 @@ pub const Vertex = extern struct {
     normal: Vec3,
     uv_y: f32,
     color: Vec4,
+};
+
+    
+pub const Line = extern struct {
+    p0: Vec3,
+    pad1: f32 = 0,
+    p1: Vec3,
+    pad2: f32 = 0,
+
+    pub fn new(p0: [3]f32, p1: [3]f32) Line {
+        return .{
+            .p0 = .{ .x= p0[0], .y=p0[1], .z=p0[2] },
+            .p1 = .{ .x=p1[0], .y=p1[1], .z=p1[2] },
+        };
+    }
 };
 
 pub const MeshBuffers = struct {
@@ -235,8 +249,8 @@ pub fn init(core: *Core) void {
     const m = gltf.load_meshes(core, "assets/suzanne.glb") catch @panic("Failed to load mesh");
     core.buffers.meshassets[0] = m.items[0];
 
-    const my_line_geom = shapes.Line.new(.{ -20, -20, 0.0 }, .{ -20, 20, 0.0 });
-    const line_array: [6*4]u8 = @bitCast(my_line_geom);
+    const my_line_geom = Line.new(.{ -20, 0, 0.0 }, .{ 20, 0, 0.0 });
+    const line_array: [8*4]u8 = @bitCast(my_line_geom);
     const line_geometry_ssbo = uploadSSBO(core, &line_array);
     core.buffers.storage[0] = line_geometry_ssbo;
 }

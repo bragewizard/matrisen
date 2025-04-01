@@ -2,7 +2,6 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_mesh_shader : require
 #extension GL_EXT_buffer_reference : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 // Make sure this include defines SceneData with separate view and proj matrices
 #include "input_structures.glsl"
@@ -13,20 +12,26 @@ layout(triangles, max_vertices = 4, max_primitives = 2) out;
 // Output can be minimal if no fragment shader processing needed
 // layout (location = 0) out vec3 v_color; // Example if passing color
 
-layout(buffer_reference, buffer_reference_align = 16, std430) readonly buffer LinePrimitiveData {
+struct Line {
     vec3 p0;
+    float pad1;
     vec3 p1;
+    float pad2;
+};
+
+layout(buffer_reference, std430) readonly buffer LinePrimitiveData {
+    Line line;
 };
 
 // Push constants block - Simplified
 layout(push_constant) uniform constants {
     mat4 model;
-    uint64_t address;
+    LinePrimitiveData address;
 } pc;
 
 void main() {
     // --- Data Fetch (Invocation 0 could optimize this later) ---
-    LinePrimitiveData line = LinePrimitiveData(pc.address);
+    Line line = pc.address.line;
 
     // --- Calculations in View Space ---
 
@@ -69,14 +74,13 @@ void main() {
         offsetDir_view = normalize(cross(lineDir_view, up_view));
         // Handle another edge case: line is parallel to 'up'
         if (dot(offsetDir_view, offsetDir_view) < 0.0001) {
-             vec3 right_view = vec3(1.0, 0.0, 0.0);
-             offsetDir_view = normalize(cross(lineDir_view, right_view));
+            vec3 right_view = vec3(1.0, 0.0, 0.0);
+            offsetDir_view = normalize(cross(lineDir_view, right_view));
         }
     }
 
     // 7. Calculate half thickness offset vector
-    vec3 halfOffset_view = offsetDir_view * 0.1 * 0.5;
-
+    vec3 halfOffset_view = offsetDir_view * 0.05 * 0.5;
 
     // --- Set Mesh Output Count (only invocation 0) ---
     if (gl_LocalInvocationID.x == 0) {
