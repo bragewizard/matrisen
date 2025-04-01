@@ -1,16 +1,24 @@
 # Mini-Wiki: GPU Vector Graphics & Vulkan Buffer Management
 
-This document outlines concepts relevant to implementing simple vector graphics rendering on the GPU using Vulkan, particularly with mesh shaders and bindless buffer access.
+This document outlines concepts relevant to implementing simple vector graphics rendering on the GPU
+using Vulkan, particularly with mesh shaders and bindless buffer access.
 
 ## 1. GPU Vector Graphics: The Challenge
 
-Rendering sharp, resolution-independent vector graphics (lines, curves, shapes) directly on the GPU presents unique challenges compared to traditional triangle rasterization.
+Rendering sharp, resolution-independent vector graphics (lines, curves, shapes) directly on the GPU
+presents unique challenges compared to traditional triangle rasterization.
 
-*   **Anti-Aliasing (AA):** This is the biggest hurdle.
-    *   **Thin Primitives:** Standard Multi-Sample Anti-Aliasing (MSAA) works by sampling coverage at sub-pixel locations *within* a triangle. It struggles with mathematically thin lines or the edges of shapes represented by very thin triangles, as they might not cover any sample points correctly.
-    *   **Consistency:** Achieving consistent line thickness, smooth curves, and sharp corners across different angles and scales requires specialized techniques.
-*   **Fill Rules:** Implementing complex fill rules (like SVG's non-zero or even-odd) efficiently on the GPU using just triangle rasterization is non-trivial. Stencil buffer techniques are often employed.
-*   **Complexity vs. Performance:** Directly tessellating complex paths (like font glyphs or intricate SVGs) into triangles on the GPU *every frame* can be computationally expensive and complex to implement correctly.
+**Anti-Aliasing (AA):** This is the biggest hurdle.
+*   **Thin Primitives:** Standard
+Multi-Sample Anti-Aliasing (MSAA) works by sampling coverage at sub-pixel locations *within* a
+triangle. It struggles with mathematically thin lines or the edges of shapes represented by very
+thin triangles, as they might not cover any sample points correctly.     *   **Consistency:**
+Achieving consistent line thickness, smooth curves, and sharp corners across different angles and
+scales requires specialized techniques. *   **Fill Rules:** Implementing complex fill rules (like
+SVG's non-zero or even-odd) efficiently on the GPU using just triangle rasterization is non-trivial.
+Stencil buffer techniques are often employed. *   **Complexity vs. Performance:** Directly
+tessellating complex paths (like font glyphs or intricate SVGs) into triangles on the GPU *every
+frame* can be computationally expensive and complex to implement correctly.
 
 ## 2. Approaches to GPU Vector Graphics
 
