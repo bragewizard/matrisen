@@ -2,6 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_mesh_shader : require
 #extension GL_EXT_buffer_reference : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
 
 // Make sure this include defines SceneData with separate view and proj matrices
 #include "input_structures.glsl"
@@ -12,15 +13,19 @@ layout(triangles, max_vertices = 4, max_primitives = 2) out;
 // Output can be minimal if no fragment shader processing needed
 // layout (location = 0) out vec3 v_color; // Example if passing color
 
+layout(location = 0) out PerVertexData {
+    vec4 color;
+} perVertex[];
+
 struct Line {
     vec3 p0;
-    float pad1;
+    float thicknes;
     vec3 p1;
-    float pad2;
+    uint color;
 };
 
 layout(buffer_reference, std430) readonly buffer LinePrimitiveData {
-    Line line;
+    Line lines[];
 };
 
 // Push constants block - Simplified
@@ -31,9 +36,7 @@ layout(push_constant) uniform constants {
 
 void main() {
     // --- Data Fetch (Invocation 0 could optimize this later) ---
-    Line line = pc.address.line;
-
-    // --- Calculations in View Space ---
+    Line line = pc.address.lines[gl_WorkGroupID.x];
 
     // 1. Calculate ModelView matrix
     mat4 modelView = sceneData.view * pc.model;
@@ -80,7 +83,7 @@ void main() {
     }
 
     // 7. Calculate half thickness offset vector
-    vec3 halfOffset_view = offsetDir_view * 0.05 * 0.5;
+    vec3 halfOffset_view = offsetDir_view * line.thicknes * 0.1;
 
     // --- Set Mesh Output Count (only invocation 0) ---
     if (gl_LocalInvocationID.x == 0) {
@@ -94,6 +97,24 @@ void main() {
     if (gl_LocalInvocationID.x < 4) {
         vec3 base_pos_view;
         float offset_sign;
+
+        uint color = line.color; // 32-bit RGBA8
+        float a = float((color >> 24) & 0x000000FF) / 255.0;
+        float b = float((color >> 16) & 0x000000FF) / 255.0;
+        float g = float((color >> 8) & 0x000000FF) / 255.0;
+        float r = float(color & 0x000000FF) / 255.0;
+
+        // Calculate fade factor based on distance
+        float distance = length(lineMid_view) / 10; // Distance from camera to line midpoint
+
+        // Alternative: Use viewDir.z (negative, so invert and scale)
+        // float fadeFactor = clamp(-viewDir.z / 10.0, 0.0, 1.0); // Adjust 10.0 as needed
+
+        // Apply fade to alpha
+
+        // Repack the color
+        vec4 fadedColor = vec4(r,g,b,a);
+        perVertex[gl_LocalInvocationID.x].color = fadedColor;
 
         // Determine base view position and offset sign
         if (gl_LocalInvocationID.x < 2) { // Vertices near p0

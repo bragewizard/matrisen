@@ -70,7 +70,7 @@ pub const FrameContext = struct {
         frame.draw_extent = draw_extent;
 
         debug.check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
-        const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.03, 0.05, 0.10, 1 } };
+        const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.014, 0.014, 0.014, 1 } };
 
         transition_image(
             cmd,

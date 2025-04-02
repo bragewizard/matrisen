@@ -36,17 +36,19 @@ pub const Vertex = extern struct {
     color: Vec4,
 };
 
-    
-pub const Line = extern struct {
+const Line = extern struct {
     p0: Vec3,
-    pad1: f32 = 0,
+    thickness: f32,
     p1: Vec3,
-    pad2: f32 = 0,
+    colorPacked: u32, // Example: RGBA8 packed
 
-    pub fn new(p0: [3]f32, p1: [3]f32) Line {
-        return .{
-            .p0 = .{ .x= p0[0], .y=p0[1], .z=p0[2] },
-            .p1 = .{ .x=p1[0], .y=p1[1], .z=p1[2] },
+    // Helper to create a new line easily
+    pub fn new(p0: Vec3, p1: Vec3, thickness: f32, colorPacked: u32) Line {
+        return Line{
+            .p0 = p0,
+            .thickness = thickness,
+            .p1 = p1,
+            .colorPacked = colorPacked,
         };
     }
 };
@@ -189,7 +191,6 @@ pub fn uploadSSBO(core: *Core, data_slice: []const u8) StorageBuffer {
         const byte_data_ptr = @as([*]u8, @ptrCast(mapped_data_ptr));
         const staging_slice = byte_data_ptr[0..data_size];
         @memcpy(staging_slice, data_slice);
-
     } else {
         std.log.err("Failed to map staging buffer for SSBO upload.", .{});
         @panic("");
@@ -224,7 +225,7 @@ pub fn uploadSSBO(core: *Core, data_slice: []const u8) StorageBuffer {
     };
 }
 
-pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4 ) void {
+pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4) void {
     frame.allocatedbuffers = create(
         core,
         @sizeOf(SceneDataUniform),
@@ -249,8 +250,50 @@ pub fn init(core: *Core) void {
     const m = gltf.load_meshes(core, "assets/suzanne.glb") catch @panic("Failed to load mesh");
     core.buffers.meshassets[0] = m.items[0];
 
-    const my_line_geom = Line.new(.{ -20, 0, 0.0 }, .{ 20, 0, 0.0 });
-    const line_array: [8*4]u8 = @bitCast(my_line_geom);
+    const numlinesx = 99;
+    const numlinesy = 99;
+    const totalLines = numlinesx + numlinesy + 1;
+    var lines: [totalLines]Line = undefined;
+
+    // Calculate the bounds based on the number of *segments*, which is numLines - 1
+    const spacing = 1;
+    const halfWidth = (numlinesx - 1) * spacing * 0.5;
+    const halfDepth = (numlinesy - 1) * spacing * 0.5;
+    const color: Vec4 = .new(0.024, 0.024, 0.024, 1.0);
+    const xcolor: Vec4 = .new(1.000, 0.162, 0.078, 1.0);
+    const ycolor: Vec4 = .new(0.529, 0.949, 0.204, 1.0);
+    const zcolor: Vec4 = .new(0.114, 0.584, 0.929, 1.0);
+    const rgba8 = color.packU8();
+    const xcol = xcolor.packU8();
+    const ycol = ycolor.packU8();
+    const zcol = zcolor.packU8();
+
+    // Generate lines parallel to the Z-axis (varying X)
+    var i: u32 = 0;
+    while (i < numlinesx) : (i += 1) {
+        const floati: f32 = @floatFromInt(i); // X coord changes
+        const x = (floati * spacing) - halfDepth;
+        const p0: Vec3 = .new(x, -halfWidth, 0); // Z extent fixed
+        const p1: Vec3 = .new(x, halfWidth, 0); // Z extent fixed
+        // No allocation needed here, append moves the struct
+        if (i == numlinesx / 2) lines[i] = .new(p0, p1, 0.2, ycol) else lines[i] = .new(p0, p1, 0.08, rgba8);
+    }
+
+    // Generate lines parallel to the X-axis (varying Z)
+    var j: u32 = 0;
+    while (j < numlinesy) : (j += 1) {
+        const floatj: f32 = @floatFromInt(j);
+        const y = (floatj * spacing) - halfWidth; // Z coord changes
+        const p0: Vec3 = .new(-halfDepth, y, 0); // X extent fixed
+        const p1: Vec3 = .new(halfDepth, y, 0); // X extent fixed
+        if (j == numlinesy / 2) lines[i + j] = .new(p0, p1, 0.2, xcol) else lines[i + j] = .new(p0, p1, 0.08, rgba8);
+    }
+
+    const p0: Vec3 = .new(0, 0, -halfDepth); // X extent fixed
+    const p1: Vec3 = .new(0, 0, halfDepth); // X extent fixed
+    lines[i + j] = .new(p0, p1, 0.2, zcol);
+    // const my_line_geom: Line = .new(.new(-20, 0, 0.0), .new(20, 0, 0.0), .{ .float16 = 0.1, .other = 0 }, 0);
+    const line_array: [@sizeOf(Line) * totalLines]u8 = @bitCast(lines);
     const line_geometry_ssbo = uploadSSBO(core, &line_array);
     core.buffers.storage[0] = line_geometry_ssbo;
 }

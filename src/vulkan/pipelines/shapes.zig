@@ -132,7 +132,7 @@ pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
     }
 
     var view = Mat4x4.identity;
-    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = 2.0 });
+    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = 0.0 });
     const model = view;
     var pc: ModelPushConstants = .{
         .model = model,
@@ -143,5 +143,5 @@ pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
     c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.layout, 0, 1, &set, 0, null);
     c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.layout, 1, 1, &self.textureset, 0, null);
     c.vkCmdPushConstants(cmd, self.layout, c.VK_SHADER_STAGE_MESH_BIT_EXT, 0, @sizeOf(ModelPushConstants), &pc);
-    core.vkCmdDrawMeshTasksEXT.?(cmd, 1, 1, 1);
+    core.vkCmdDrawMeshTasksEXT.?(cmd, 200, 1, 1);
 }

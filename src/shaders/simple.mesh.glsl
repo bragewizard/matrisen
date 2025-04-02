@@ -20,10 +20,10 @@ layout(location = 0) out PerVertexData {
 } perVertex[];
 
 const vec3 vertices[4] = {
-        vec3(-100, -100, 0), // Bottom-left
-        vec3(100, -100, 0), // Bottom-right
-        vec3(-100, 100, 0), // Top-left
-        vec3(100, 100, 0) // Top-right
+        vec3(0, 0, 0.1), // Bottom-left
+        vec3(50, 0, 0.1), // Bottom-right
+        vec3(0, 50, 0.1), // Top-left
+        vec3(50, 50, 0.1) // Top-right
     };
 
 const vec3 normals[4] = {

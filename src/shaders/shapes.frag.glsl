@@ -5,8 +5,13 @@
 
 #include "input_structures.glsl"
 
+layout(location = 0) in PerVertexData {
+    vec4 color;
+} inData;
+
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = vec4(0.02 , 0.02, 0.02, 1);
+    outColor = inData.color;
+    // outColor = vec4(0,0,0,1);
 }

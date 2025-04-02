@@ -152,7 +152,7 @@ pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
     time /= 100;
     var view = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
     view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = 0.0, .y = 0.0, .z = 2.0 });
+    view = view.translate(.{ .x = 25.0, .y = 25.0, .z = 2.0 });
     const model = view;
     var pc: ModelPushConstants = .{
         .model = model,

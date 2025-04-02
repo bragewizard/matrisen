@@ -187,8 +187,8 @@ pub fn createDefaultTextures(core: *Core) void {
     var self = &core.images;
     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
     var white: u32 = Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
-    var grey: u32 = Vec4.packU8(.{ .x = 0.3, .y = 0.3, .z = 0.3, .w = 1 });
-    var black: u32 = Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 0 });
+    var grey: u32 = Vec4.packU8(.{ .x = 0.2, .y = 0.2, .z = 0.2, .w = 1 });
+    var black: u32 = Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 1 });
     const magenta: u32 = Vec4.packU8(.{ .x = 1, .y = 0, .z = 1, .w = 1 });
 
     self.textures[0] = create_upload(

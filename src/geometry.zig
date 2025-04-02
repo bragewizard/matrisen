@@ -11,6 +11,10 @@ pub fn Vec2(comptime T: type) type {
         pub const unit_x: Self = .{ .x = 1, .y = 0 };
         pub const unit_y: Self = .{ .x = 0, .y = 1 };
 
+        pub fn new(x: T, y: T) Self {
+            return .{ .x = x, .y = y };
+        }
+
         pub fn toVec3(self: Self, z: T) Vec4(T) {
             return .{ .x = self.x, .y = self.y, .z = z };
         }
@@ -49,7 +53,7 @@ pub fn Vec3(comptime T: type) type {
             return @abs(self.squaredNorm() - 1.0) <= 1e-4;
         }
 
-        pub fn of(x: T, y: T, z: T) Self {
+        pub fn new(x: T, y: T, z: T) Self {
             return .{ .x = x, .y = y, .z = z };
         }
 
@@ -177,6 +181,10 @@ pub fn Vec4(comptime T: type) type {
         pub const point_y: Self = .{ .x = 0, .y = 1, .z = 0, .w = 1 };
         pub const point_z: Self = .{ .x = 0, .y = 0, .z = 1, .w = 1 };
 
+        pub fn new(x: T, y: T, z: T, w: T) Self {
+            return .{ .x = x, .y = y, .z = z, .w = w };
+        }
+
         pub fn addPoint(self: Self, other: Self) Self {
             return .{ .x = self.x + other.x, .y = self.y + other.y, .z = self.z + other.z, .w = 1 };
         }
@@ -203,15 +211,11 @@ pub fn Vec4(comptime T: type) type {
 
         pub fn packU8(self: Self) u32 {
             if (T != f32) @compileError("type must be f32 to use this function");
-            const r8g8b8a8 = packed struct { x: u8, y: u8, z: u8, w: u8 };
-            const u32union = packed union { parts: r8g8b8a8, int: u32 };
-            const packedU8 = u32union{ .parts = r8g8b8a8{
-                .x = @intFromFloat(@round(std.math.clamp(self.x, 0, 1) * 255.0)),
-                .y = @intFromFloat(@round(std.math.clamp(self.y, 0, 1) * 255.0)),
-                .z = @intFromFloat(@round(std.math.clamp(self.z, 0, 1) * 255.0)),
-                .w = @intFromFloat(@round(std.math.clamp(self.w, 0, 1) * 255.0)),
-            } };
-            return packedU8.int;
+            const r: u32 = @intFromFloat(@round(std.math.clamp(self.x, 0, 1) * 255.0));
+            const g: u32 = @intFromFloat(@round(std.math.clamp(self.y, 0, 1) * 255.0));
+            const b: u32 = @intFromFloat(@round(std.math.clamp(self.z, 0, 1) * 255.0));
+            const a: u32 = @intFromFloat(@round(std.math.clamp(self.w, 0, 1) * 255.0));
+            return ((a << 24) | (b << 16) | (g << 8) | r);
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -458,6 +462,10 @@ pub fn Quat(comptime T: type) type {
 
         const Self = @This();
         pub const identity: Self = .{ .w = 1, .x = 0, .y = 0, .z = 0 };
+
+        pub fn new(x: T, y: T, z: T, w: T) Self {
+            return .{ .x = x, .y = y, .z = z, .w = w };
+        }
 
         pub fn aroundAxis(axis: Vec3(T), angle: T) Self {
             assert(axis.isNormalized());
