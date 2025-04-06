@@ -1,13 +1,14 @@
 const std = @import("std");
 const c = @import("clibs");
-const geometry = @import("geometry");
 const check_vk_panic = @import("../debug.zig").check_vk_panic;
-const common = @import("common.zig");
-const descriptorbuilder = @import("../descriptorbuilder.zig");
+const descriptorbuilder = @import("../descriptormanager.zig");
 const vk_alloc_cbs = Core.vkallocationcallbacks;
-const PipelineBuilder = @import("../pipelinebuilder.zig");
-const ModelPushConstants = common.ModelPushConstants;
-const SceneDataUniform = common.SceneDataUniform;
+const buffers = @import("../buffers.zig");
+const geometry = @import("geometry");
+const Vec3 = geometry.Vec3(f32);
+const Vec4 = geometry.Vec4(f32);
+const PipelineBuilder = @import("../pipelinemanager.zig");
+const SceneDataUniform = buffers.SceneDataUniform;
 const FrameContext = @import("../commands.zig").FrameContext;
 const LayoutBuilder = descriptorbuilder.LayoutBuilder;
 const Writer = descriptorbuilder.Writer;
@@ -16,9 +17,8 @@ const Mat4x4 = geometry.Mat4x4(f32);
 
 layout: c.VkPipelineLayout = undefined,
 pipeline: c.VkPipeline = undefined,
-texturelayout: c.VkDescriptorSetLayout = undefined,
+resourcelayout: c.VkDescriptorSetLayout = undefined,
 scenedatalayout: c.VkDescriptorSetLayout = undefined,
-textureset: c.VkDescriptorSet = undefined,
 
 const Self = @This();
 
@@ -34,22 +34,19 @@ pub fn init(self: *Self, core: *Core) void {
             0,
         );
     }
-
     {
         var builder: LayoutBuilder = .init(core.cpuallocator);
         defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        builder.add_binding(1, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        builder.add_binding(2, c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        self.texturelayout = builder.build(
+        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        self.resourcelayout = builder.build(
             core.device.handle,
             c.VK_SHADER_STAGE_VERTEX_BIT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
             null,
             0,
         );
     }
-    const vertex_code align(4) = @embedFile("mesh.vert.glsl").*;
-    const fragment_code align(4) = @embedFile("mesh.frag.glsl").*;
+    const vertex_code align(4) = @embedFile("standard.vert.glsl").*;
+    const fragment_code align(4) = @embedFile("standard.frag.glsl").*;
 
     const vertex_module = PipelineBuilder.createShaderModule(
         core.device.handle,
@@ -67,21 +64,14 @@ pub fn init(self: *Self, core: *Core) void {
     defer c.vkDestroyShaderModule(core.device.handle, vertex_module, vk_alloc_cbs);
     defer c.vkDestroyShaderModule(core.device.handle, fragment_module, vk_alloc_cbs);
 
-    const matrixrange = c.VkPushConstantRange{
-        .offset = 0,
-        .size = @sizeOf(ModelPushConstants),
-        .stageFlags = c.VK_SHADER_STAGE_VERTEX_BIT,
-    };
-
-    const layouts = [_]c.VkDescriptorSetLayout{ self.scenedatalayout, self.texturelayout };
+    const layouts = [_]c.VkDescriptorSetLayout{ self.scenedatalayout, self.resourcelayout };
 
     const mesh_layout_info = c.VkPipelineLayoutCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .flags = 0,
         .setLayoutCount = 2,
         .pSetLayouts = &layouts,
-        .pushConstantRangeCount = 1,
-        .pPushConstantRanges = &matrixrange,
+        .pushConstantRangeCount = 0,
     };
 
     var newlayout: c.VkPipelineLayout = undefined;
@@ -103,7 +93,7 @@ pub fn init(self: *Self, core: *Core) void {
         .pName = "main",
     };
 
-    var shaders :[2]c.VkPipelineShaderStageCreateInfo = .{ vertex, fragment };
+    var shaders: [2]c.VkPipelineShaderStageCreateInfo = .{ vertex, fragment };
     var pipelineBuilder: PipelineBuilder = .init();
     pipelineBuilder.shader_stages = &shaders;
     pipelineBuilder.set_input_topology(c.VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
@@ -124,46 +114,20 @@ pub fn init(self: *Self, core: *Core) void {
     // self.transparent = pipelineBuilder.build_pipeline(core.device.handle);
 }
 
-
 pub fn deinit(self: *Self, core: *Core) void {
     c.vkDestroyDescriptorSetLayout(core.device.handle, self.scenedatalayout, vk_alloc_cbs);
-    c.vkDestroyDescriptorSetLayout(core.device.handle, self.texturelayout, vk_alloc_cbs);
+    c.vkDestroyDescriptorSetLayout(core.device.handle, self.resourcelayout, vk_alloc_cbs);
     c.vkDestroyPipelineLayout(core.device.handle, self.layout, vk_alloc_cbs);
     c.vkDestroyPipeline(core.device.handle, self.pipeline, vk_alloc_cbs);
 }
 
 pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
     const cmd = frame.command_buffer;
-    const set = frame.descriptors.allocate(core.device.handle, self.scenedatalayout, null);
-    {
-        var writer = Writer.init(core.cpuallocator);
-        defer writer.deinit();
-        writer.write_buffer(
-            0,
-            frame.allocatedbuffers.buffer,
-            @sizeOf(SceneDataUniform),
-            0,
-            c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        );
-        writer.update_set(core.device.handle, set);
-    }
-
-    var time: f32 = @floatFromInt(core.framenumber);
-    time /= 100;
-    var view = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
-    view = view.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    view = view.translate(.{ .x = 25.0, .y = 25.0, .z = 2.0 });
-    const model = view;
-    var pc: ModelPushConstants = .{
-        .model = model,
-        .vertex_buffer = core.buffers.meshassets[0].mesh_buffers.vertex_buffer_adress,
-    };
-
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipeline);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.layout, 0, 1, &set, 0, null);
-    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.layout, 1, 1, &self.textureset, 0, null);
-    c.vkCmdPushConstants(cmd, self.layout, c.VK_SHADER_STAGE_VERTEX_BIT, 0, @sizeOf(ModelPushConstants), &pc);
-    c.vkCmdBindIndexBuffer(cmd, core.buffers.meshassets[0].mesh_buffers.index_buffer.buffer, 0, c.VK_INDEX_TYPE_UINT32);
-    const surface = core.buffers.meshassets[0].surfaces.items[0];
-    c.vkCmdDrawIndexed(cmd, surface.count, 1, surface.start_index, 0, 0);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.layout, 0, 1, &frame.sets[0], 0, null);
+    c.vkCmdBindDescriptorSets(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.layout, 1, 1, &core.sets[0], 0, null);
+    c.vkCmdBindIndexBuffer(cmd, core.buffers.index.buffer, 0, c.VK_INDEX_TYPE_UINT32);
+    c.vkCmdDrawIndexedIndirect(cmd, core.buffers.indirect.buffer, 0, 1, @sizeOf(c.VkDrawIndexedIndirectCommand));
+    // c.vkCmdDrawIndexed(cmd, 1, 1, 0, 0, 0);
+    // c.vkCmdDraw(cmd, 24, 1, 0, 0);
 }

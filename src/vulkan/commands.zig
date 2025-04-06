@@ -1,16 +1,19 @@
 const std = @import("std");
 const log = std.log.scoped(.commands);
 const c = @import("clibs");
-const buffer = @import("buffers.zig");
+const buffers = @import("buffers.zig");
 const debug = @import("debug.zig");
-const descriptorbuilder = @import("descriptorbuilder.zig");
-const Allocator = descriptorbuilder.Allocator;
+const descriptormanager = @import("descriptormanager.zig");
+const geometry = @import("geometry");
+const Mat4x4 = geometry.Mat4x4(f32);
+const Allocator = descriptormanager.Allocator;
+const Writer = descriptormanager.Writer;
 const Core = @import("core.zig");
 const Device = @import("device.zig").Device;
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const vk_alloc_cbs = @import("core.zig").vkallocationcallbacks;
 
-const FRAMES = 2;
+pub const frames_in_flight = 2;
 
 pub const FrameContext = struct {
     swapchain_semaphore: c.VkSemaphore = null,
@@ -19,12 +22,14 @@ pub const FrameContext = struct {
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
     descriptors: Allocator = .{},
-    allocatedbuffers: buffer.AllocatedBuffer = undefined,
+    buffers: buffers.PerFrameBuffers = undefined,
+    sets: [2]c.VkDescriptorSet = undefined,
     swapchain_image_index: u32 = 0,
     draw_extent: c.VkExtent2D = undefined,
 
-    pub fn flush(self: *FrameContext, core: *Core) void {
-        c.vmaDestroyBuffer(core.gpuallocator, self.allocatedbuffers.buffer, self.allocatedbuffers.allocation);
+    pub fn destroyBuffers(self: *FrameContext, core: *Core) void {
+        c.vmaDestroyBuffer(core.gpuallocator, self.buffers.scenedata.buffer, self.buffers.scenedata.allocation);
+        c.vmaDestroyBuffer(core.gpuallocator, self.buffers.poses.buffer, self.buffers.poses.allocation);
     }
 
     pub fn submitBegin(frame: *FrameContext, core: *Core) !void {
@@ -44,9 +49,6 @@ pub const FrameContext = struct {
             core.resizerequest = true;
             return error.SwapchainOutOfDate;
         }
-
-        frame.flush(core);
-        frame.descriptors.clear_pools(core.device.handle);
 
         debug.check_vk(c.vkResetFences(core.device.handle, 1, &frame.render_fence)) catch @panic("Failed to reset render fence");
         debug.check_vk(c.vkResetCommandBuffer(frame.command_buffer, 0)) catch @panic("Failed to reset command buffer");
@@ -209,7 +211,7 @@ pub const FrameContext = struct {
 };
 
 pub const FrameContexts = struct {
-    frames: [FRAMES]FrameContext = .{FrameContext{}} ** FRAMES,
+    frames: [frames_in_flight]FrameContext = .{FrameContext{}} ** frames_in_flight,
     current: u8 = 0,
 
     pub fn init(core: *Core) void {
@@ -261,7 +263,6 @@ pub const FrameContexts = struct {
                 .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
             };
             frame.descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
-            log.info("Created framecontext", .{});
         }
     }
 
@@ -272,12 +273,12 @@ pub const FrameContexts = struct {
             c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
             frame.descriptors.deinit(core.device.handle);
-            frame.flush(core);
+            frame.destroyBuffers(core);
         }
     }
 
     pub fn switch_frame(self: *FrameContexts) void {
-        self.current = (self.current + 1) % FRAMES;
+        self.current = (self.current + 1) % frames_in_flight;
     }
 };
 

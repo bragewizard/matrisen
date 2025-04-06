@@ -8,22 +8,25 @@ const std = @import("std");
 const debug = @import("debug.zig");
 const c = @import("clibs");
 const commands = @import("commands.zig");
+const buffer = @import("buffers.zig");
+const geometry = @import("geometry");
+const descritpormanager = @import("descriptormanager.zig");
+const Mat4x4 = geometry.Mat4x4(f32);
+const ResourceEntry = buffer.ResourceEntry;
+const Writer = descritpormanager.Writer;
+const Allocator = descritpormanager.Allocator;
 const FrameContexts = commands.FrameContexts;
-const FrameContext = commands.FrameContext;
 const AsyncContext = commands.AsyncContext;
 const Window = @import("../window.zig");
 const Instance = @import("instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
-const Pipelines = @import("pipelines/root.zig");
 const Device = @import("device.zig").Device;
 const Swapchain = @import("swapchain.zig");
-const Buffers = @import("buffers.zig");
 const Images = @import("images.zig");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
 const Self = @This();
 
-vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = undefined,
 resizerequest: bool = false,
 framenumber: u64 = 0,
 cpuallocator: std.mem.Allocator = undefined,
@@ -35,9 +38,11 @@ device: Device = .{},
 swapchain: Swapchain = .{},
 framecontexts: FrameContexts = .{},
 asynccontext: AsyncContext = .{},
-buffers: Buffers = .{},
 images: Images = .{},
 pipelines: Pipelines = .{},
+descriptorallocator: Allocator = .{},
+sets: [2]c.VkDescriptorSet = undefined,
+buffers: buffer.GlobalBuffers = .{},
 
 pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     var self: Self = .{};
@@ -62,7 +67,6 @@ pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     FrameContexts.init(&self);
     AsyncContext.init(&self);
     Images.createDefaultTextures(&self);
-    Buffers.init(&self);
     Pipelines.init(&self);
     initallocator.deinit();
     return self;
@@ -82,6 +86,22 @@ pub fn deinit(self: *Self) void {
     defer FrameContexts.deinit(self);
     defer AsyncContext.deinit(self);
     defer Pipelines.deinit(self);
-    defer Buffers.deinit(self);
     defer Images.deinit(self);
 }
+
+const Pipelines = struct {
+    meshshader: @import("pipelines/meshshader.zig") = .{},
+    vertexshader: @import("pipelines/vertexshader.zig") = .{},
+
+    pub fn init(core: *Self) void {
+        inline for (std.meta.fields(Pipelines)) |field| {
+            @field(core.pipelines, field.name).init(core);
+        }
+    }
+
+    pub fn deinit(core: *Self) void {
+        inline for (std.meta.fields(Pipelines)) |field| {
+            @field(core.pipelines, field.name).deinit(core);
+        }
+    }
+};

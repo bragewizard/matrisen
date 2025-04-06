@@ -408,26 +408,21 @@ pub const Data = struct {
     lights: ArrayList(Light),
 };
 
-pub fn load_meshes(eng: *engine, path: []const u8) !ArrayList(MeshAsset) {
+pub fn load_meshes(alloc: Allocator, path: []const u8) !ArrayList(MeshAsset) {
     log.info("Loading gltf file: {s}", .{path});
-    const allocator = std.heap.page_allocator;
-    const file = try std.fs.cwd().readFileAllocOptions(allocator, path, 1_512_000, null, 4, null);
-    defer allocator.free(file);
-    var gltf = Self.init(allocator);
+    const file = try std.fs.cwd().readFileAllocOptions(alloc, path, 1_512_000, null, 4, null);
+    defer alloc.free(file);
+    var gltf = Self.init(alloc);
     defer deinit(&gltf);
 
     try gltf.parse(file);
 
-    var meshes = ArrayList(MeshAsset).init(allocator);
-    var vertices = ArrayList(Vertex).init(allocator);
-    var indices = ArrayList(u32).init(allocator);
-    defer {
-        vertices.deinit();
-        indices.deinit();
-    }
+    var meshes = ArrayList(MeshAsset).init(alloc);
+    var vertices = ArrayList(Vertex).init(alloc);
+    var indices = ArrayList(u32).init(alloc);
     for (gltf.data.meshes.items) |mesh| {
         var new_mesh: MeshAsset = .{
-            .surfaces = ArrayList(GeoSurface).init(allocator),
+            .surfaces = ArrayList(GeoSurface).init(alloc),
         };
 
         indices.clearAndFree();
@@ -502,7 +497,9 @@ pub fn load_meshes(eng: *engine, path: []const u8) !ArrayList(MeshAsset) {
             }
             try new_mesh.surfaces.append(new_surface);
         }
-        new_mesh.mesh_buffers = upload_mesh(eng, indices.items, vertices.items);
+        new_mesh.indices = try indices.toOwnedSlice();
+        new_mesh.vertices = try vertices.toOwnedSlice();
+        log.info("vertices:{d}\n", .{new_mesh.vertices.len});
         try meshes.append(new_mesh);
     }
     return meshes;
@@ -1896,12 +1893,12 @@ fn fillParents(data: *Data, node: *Node, parent_index: Index) void {
 //                     try expectEqualSlices(f32, tmp.items, &[72]f32{
 //                         // zig fmt: off
 //                         -0.50, -0.50, 0.50, 0.50, -0.50, 0.50, -0.50, 0.50, 0.50,
-//                         0.50, 0.50, 0.50, 0.50, -0.50, 0.50, -0.50, -0.50, 0.50, 
-//                         0.50, -0.50, -0.50, -0.50, -0.50, -0.50, 0.50, 0.50, 0.50, 
-//                         0.50, -0.50, 0.50, 0.50, 0.50, -0.50, 0.50, -0.50, -0.50, 
-//                         -0.50, 0.50, 0.50, 0.50, 0.50, 0.50, -0.50, 0.50, -0.50, 
-//                         0.50, 0.50, -0.50, -0.50, -0.50, 0.50, -0.50, 0.50, 0.50, 
-//                         -0.50, -0.50, -0.50, -0.50, 0.50, -0.50, -0.50, -0.50, -0.50, 
+//                         0.50, 0.50, 0.50, 0.50, -0.50, 0.50, -0.50, -0.50, 0.50,
+//                         0.50, -0.50, -0.50, -0.50, -0.50, -0.50, 0.50, 0.50, 0.50,
+//                         0.50, -0.50, 0.50, 0.50, 0.50, -0.50, 0.50, -0.50, -0.50,
+//                         -0.50, 0.50, 0.50, 0.50, 0.50, 0.50, -0.50, 0.50, -0.50,
+//                         0.50, 0.50, -0.50, -0.50, -0.50, 0.50, -0.50, 0.50, 0.50,
+//                         -0.50, -0.50, -0.50, -0.50, 0.50, -0.50, -0.50, -0.50, -0.50,
 //                         -0.50, 0.50, -0.50, 0.50, -0.50, -0.50, 0.50, 0.50, -0.50,
 //                     });
 //                 },

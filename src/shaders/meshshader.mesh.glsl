@@ -1,45 +1,53 @@
 #version 460 core
-#extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_mesh_shader : require
 #extension GL_EXT_buffer_reference : require
-#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
 
-// Make sure this include defines SceneData with separate view and proj matrices
-#include "input_structures.glsl"
+struct Vertex {
+    vec3 p0;
+    float thicknes;
+    vec3 p1;
+    uint color;
+    vec4 notused;
+};
+
+struct Entry {
+    uint pose_index;
+    uint object_index;
+    uint vertex_offset;
+};
+
+layout(buffer_reference, std430) readonly buffer Vertices { Vertex vertices[]; };
+
+layout(buffer_reference, std430) buffer Poses { mat4 poses[]; };
+
+layout(set = 0, binding = 0) uniform SceneData {
+    mat4 view;
+    mat4 proj;
+    mat4 viewproj;
+    vec4 ambient_color;
+    vec4 sun_direction;
+    vec4 sun_color;
+    Poses posebuffer;
+    Vertices vertexbuffer;
+} scenedata;
+
+layout(set = 1, binding = 0) readonly buffer ResourceTable { Entry entries[]; } resources;
 
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 layout(triangles, max_vertices = 4, max_primitives = 2) out;
-
-// Output can be minimal if no fragment shader processing needed
-// layout (location = 0) out vec3 v_color; // Example if passing color
 
 layout(location = 0) out PerVertexData {
     vec4 color;
 } perVertex[];
 
-struct Line {
-    vec3 p0;
-    float thicknes;
-    vec3 p1;
-    uint color;
-};
-
-layout(buffer_reference, std430) readonly buffer LinePrimitiveData {
-    Line lines[];
-};
-
-// Push constants block - Simplified
-layout(push_constant) uniform constants {
-    mat4 model;
-    LinePrimitiveData address;
-} pc;
-
 void main() {
     // --- Data Fetch (Invocation 0 could optimize this later) ---
-    Line line = pc.address.lines[gl_WorkGroupID.x];
+    Entry object = resources.entries[gl_WorkGroupID.y];
+    Vertex line = scenedata.vertexbuffer.vertices[gl_WorkGroupID.x + object.vertex_offset]; //FIX find a way to offset the vertices
+    mat4 pose = scenedata.posebuffer.poses[object.pose_index];
 
     // 1. Calculate ModelView matrix
-    mat4 modelView = sceneData.view * pc.model;
+    mat4 modelView = scenedata.view * pose;
 
     // 2. Transform line endpoints to View Space
     //    (Assuming standard matrices where w=1 initially)
@@ -113,7 +121,7 @@ void main() {
         // Apply fade to alpha
 
         // Repack the color
-        vec4 fadedColor = vec4(r,g,b,a);
+        vec4 fadedColor = vec4(r, g, b, a);
         perVertex[gl_LocalInvocationID.x].color = fadedColor;
 
         // Determine base view position and offset sign
@@ -133,7 +141,7 @@ void main() {
         vec3 final_pos_view = base_pos_view + halfOffset_view * offset_sign;
 
         // Project View Space position to Clip Space
-        gl_MeshVerticesEXT[gl_LocalInvocationID.x].gl_Position = sceneData.proj * vec4(final_pos_view, 1.0);
+        gl_MeshVerticesEXT[gl_LocalInvocationID.x].gl_Position = scenedata.proj * vec4(final_pos_view, 1.0);
 
         // Example: Output color (adjust as needed)
         // v_color[gl_LocalInvocationID.x] = vec3(1.0, 0.0, 1.0); // Magenta

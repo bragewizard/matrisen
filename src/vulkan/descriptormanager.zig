@@ -205,7 +205,7 @@ pub const Writer = struct {
         self.image_infos.deinit();
     }
 
-    pub fn write_buffer(
+    pub fn writeBuffer(
         self: *@This(),
         binding: u32,
         buffer: c.VkBuffer,
@@ -229,7 +229,7 @@ pub const Writer = struct {
         self.writes.append(write) catch @panic("failed to append");
     }
 
-    pub fn write_image(
+    pub fn writeImage(
         self: *@This(),
         binding: u32,
         image: c.VkImageView,
@@ -260,7 +260,7 @@ pub const Writer = struct {
         self.image_infos.clearAndFree();
     }
 
-    pub fn update_set(self: *@This(), device: c.VkDevice, set: c.VkDescriptorSet) void {
+    pub fn updateSet(self: *@This(), device: c.VkDevice, set: c.VkDescriptorSet) void {
         for (self.writes.items) |*write| {
             write.*.dstSet = set;
         }

@@ -76,7 +76,7 @@ pub fn buildPipeline(self: *Self, device: c.VkDevice) c.VkPipeline {
         .sType = c.VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
     });
 
-    var pipeline_info = std.mem.zeroInit(c.VkGraphicsPipelineCreateInfo, .{
+    var pipeline_info: c.VkGraphicsPipelineCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &self.render_info,
         .stageCount = @as(u32, @intCast(self.shader_stages.len)),
@@ -89,7 +89,7 @@ pub fn buildPipeline(self: *Self, device: c.VkDevice) c.VkPipeline {
         .pColorBlendState = &color_blending,
         .pDepthStencilState = &self.depth_stencil,
         .layout = self.pipeline_layout,
-    });
+    };
 
     const dynamic_state = [_]c.VkDynamicState{ c.VK_DYNAMIC_STATE_VIEWPORT, c.VK_DYNAMIC_STATE_SCISSOR };
     const dynamic_state_info: c.VkPipelineDynamicStateCreateInfo = .{

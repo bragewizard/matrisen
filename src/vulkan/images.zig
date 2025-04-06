@@ -188,8 +188,9 @@ pub fn createDefaultTextures(core: *Core) void {
     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
     var white: u32 = Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
     var grey: u32 = Vec4.packU8(.{ .x = 0.2, .y = 0.2, .z = 0.2, .w = 1 });
+    const grey1 = Vec4.packU8(.{ .x = 0.05, .y = 0.05, .z = 0.05, .w = 1 });
+    const grey2 = Vec4.packU8(.{ .x = 0.08, .y = 0.08, .z = 0.08, .w = 1 });
     var black: u32 = Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 1 });
-    const magenta: u32 = Vec4.packU8(.{ .x = 1, .y = 0, .z = 1, .w = 1 });
 
     self.textures[0] = create_upload(
         core,
@@ -226,7 +227,7 @@ pub fn createDefaultTextures(core: *Core) void {
     for (0..16) |x| {
         for (0..16) |y| {
             const tile = ((x % 2) ^ (y % 2));
-            checker[y * 16 + x] = if (tile == 1) black else magenta;
+            checker[y * 16 + x] = if (tile == 1) grey1 else grey2;
         }
     }
     self.textures[3] = create_upload(
@@ -305,7 +306,14 @@ pub fn create(
         .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
         .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     });
-    check_vk_panic(c.vmaCreateImage(core.gpuallocator, &img_info, &alloc_info, &new_image.image, &new_image.allocation, null));
+    check_vk_panic(c.vmaCreateImage(
+        core.gpuallocator,
+        &img_info,
+        &alloc_info,
+        &new_image.image,
+        &new_image.allocation,
+        null,
+    ));
     var aspect_flags = c.VK_IMAGE_ASPECT_COLOR_BIT;
     if (format == c.VK_FORMAT_D32_SFLOAT) {
         aspect_flags = c.VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -350,7 +358,12 @@ pub fn create_upload(
 ) AllocatedImage(1) {
     const data_size = size.width * size.height * size.depth * 4;
 
-    const staging = buffer.create(core, data_size, c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, c.VMA_MEMORY_USAGE_CPU_TO_GPU);
+    const staging = buffer.create(
+        core,
+        data_size,
+        c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+    );
     defer c.vmaDestroyBuffer(core.gpuallocator, staging.buffer, staging.allocation);
 
     const byte_data = @as([*]u8, @ptrCast(staging.info.pMappedData.?));
@@ -366,7 +379,12 @@ pub fn create_upload(
     );
     AsyncContext.submitBegin(core);
     const cmd = core.asynccontext.command_buffer;
-    commands.transition_image(cmd, new_image.image, c.VK_IMAGE_LAYOUT_UNDEFINED, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    commands.transition_image(
+        cmd,
+        new_image.image,
+        c.VK_IMAGE_LAYOUT_UNDEFINED,
+        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    );
     const image_copy_region: c.VkBufferImageCopy = .{
         .bufferOffset = 0,
         .bufferRowLength = 0,
@@ -379,7 +397,14 @@ pub fn create_upload(
         },
         .imageExtent = size,
     };
-    c.vkCmdCopyBufferToImage(cmd, staging.buffer, new_image.image, c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy_region);
+    c.vkCmdCopyBufferToImage(
+        cmd,
+        staging.buffer,
+        new_image.image,
+        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &image_copy_region,
+    );
     commands.transition_image(
         cmd,
         new_image.image,

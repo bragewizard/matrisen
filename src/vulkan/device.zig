@@ -10,12 +10,13 @@ const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
 const api_version = @import("instance.zig").api_version;
 const required_device_extensions: []const [*c]const u8 = &.{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
 
+pub var vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = null;
+
 const PhysicalDeviceSelectionCriteria = enum {
     First,
     PreferDiscrete,
     PreferIntegrated,
 };
-
 
 pub const PhysicalDevice = struct {
     handle: c.VkPhysicalDevice = null,
@@ -297,7 +298,7 @@ pub const Device = struct {
         if (procAddr == null) {
             @panic("");
         }
-        core.vkCmdDrawMeshTasksEXT = procAddr;
+        vkCmdDrawMeshTasksEXT = procAddr;
 
         core.device.handle = device;
         core.device.graphics_queue = graphics_queue;
