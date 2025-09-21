@@ -1,4 +1,4 @@
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const std = @import("std");
 const vkallocationcallbacks = @import("vulkan/core.zig").vkallocationcallbacks;
 

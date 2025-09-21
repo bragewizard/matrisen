@@ -1,4 +1,4 @@
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const std = @import("std");
 
 pub fn check_vk(result: c.VkResult) !void {
@@ -55,52 +55,192 @@ pub fn check_vk(result: c.VkResult) !void {
 
 pub fn check_vk_panic(result: c.VkResult) void {
     switch (result) {
-        c.VK_SUCCESS => {return;},
-        c.VK_NOT_READY => {std.log.warn("Not ready",.{}); return ;},
-        c.VK_TIMEOUT => {std.log.warn("Timeout",.{}); return ;},
-        c.VK_EVENT_SET => {std.log.warn("Event set",.{}); return ;},
-        c.VK_EVENT_RESET => {std.log.warn("Event reset",.{}); return ;},
-        c.VK_INCOMPLETE => {std.log.warn("Incomplete",.{}); return ;},
-        c.VK_ERROR_OUT_OF_HOST_MEMORY => {std.log.err("Error out of host memory",.{}); @panic("");},
-        c.VK_ERROR_OUT_OF_DEVICE_MEMORY => {std.log.err("Error out of device memory",.{}); @panic("");},
-        c.VK_ERROR_INITIALIZATION_FAILED => {std.log.err("Error initialization failed",.{}); @panic("");},
-        c.VK_ERROR_DEVICE_LOST => {std.log.err("Error device lost",.{}); @panic("");},
-        c.VK_ERROR_MEMORY_MAP_FAILED => {std.log.err("Error memory map failed",.{}); @panic("");},
-        c.VK_ERROR_LAYER_NOT_PRESENT => {std.log.err("Error layer not present",.{}); @panic("");},
-        c.VK_ERROR_EXTENSION_NOT_PRESENT => {std.log.err("Error extension not present",.{}); @panic("");},
-        c.VK_ERROR_FEATURE_NOT_PRESENT => {std.log.err("Error feature not present",.{}); @panic("");},
-        c.VK_ERROR_INCOMPATIBLE_DRIVER => {std.log.err("Error incompatible driver",.{}); @panic("");},
-        c.VK_ERROR_TOO_MANY_OBJECTS => {std.log.err("Error too many objects",.{}); @panic("");},
-        c.VK_ERROR_FORMAT_NOT_SUPPORTED => {std.log.err("Error format not supported",.{}); @panic("");},
-        c.VK_ERROR_FRAGMENTED_POOL => {std.log.err("Error fragmented pool",.{}); @panic("");},
-        c.VK_ERROR_UNKNOWN => {std.log.err("Error unknown",.{}); @panic("");},
-        c.VK_ERROR_OUT_OF_POOL_MEMORY => {std.log.err("Error out of pool memory",.{}); @panic("");},
-        c.VK_ERROR_INVALID_EXTERNAL_HANDLE => {std.log.err("Error invalid external handle",.{}); @panic("");},
-        c.VK_ERROR_FRAGMENTATION => {std.log.err("Error fragmentation",.{}); @panic("");},
-        c.VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS => {std.log.err("Error invalid opaque capture address",.{}); @panic("");},
-        c.VK_PIPELINE_COMPILE_REQUIRED => {std.log.err("Pipeline compile required",.{}); @panic("");},
-        c.VK_ERROR_SURFACE_LOST_KHR => {std.log.err("Error surface lost khr",.{}); @panic("");},
-        c.VK_ERROR_NATIVE_WINDOW_IN_USE_KHR => {std.log.err("Error native window in use khr",.{}); @panic("");},
-        c.VK_SUBOPTIMAL_KHR => {std.log.err("Suboptimal khr",.{}); @panic("");},
-        c.VK_ERROR_OUT_OF_DATE_KHR => {std.log.err("Error out of date khr",.{}); @panic("");},
-        c.VK_ERROR_INCOMPATIBLE_DISPLAY_KHR => {std.log.err("Error incompatible display khr",.{}); @panic("");},
-        c.VK_ERROR_VALIDATION_FAILED_EXT => {std.log.err("Error validation failed ext",.{}); @panic("");},
-        c.VK_ERROR_INVALID_SHADER_NV => {std.log.err("Error invalid shader nv",.{}); @panic("");},
-        c.VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR => {std.log.err("Error image usage not supported khr",.{}); @panic("");},
-        c.VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR => {std.log.err("Error video picture layout not supported khr",.{}); @panic("");},
-        c.VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR => {std.log.err("Error video profile operation not supported khr",.{}); @panic("");},
-        c.VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR => {std.log.err("Error video profile format not supported khr",.{}); @panic("");},
-        c.VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR => {std.log.err("Error video profile codec not supported khr",.{}); @panic("");},
-        c.VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR => {std.log.err("Error video std version not supported khr",.{}); @panic("");},
-        c.VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT => {std.log.err("Error invalid drm format modifier plane layout ext",.{}); @panic("");},
-        c.VK_ERROR_NOT_PERMITTED_KHR => {std.log.err("Error not permitted khr",.{}); @panic("");},
-        c.VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT => {std.log.err("Error full screen exclusive mode lost ext",.{}); @panic("");},
-        c.VK_THREAD_IDLE_KHR => {std.log.err("Thread idle khr",.{}); @panic("");},
-        c.VK_THREAD_DONE_KHR => {std.log.err("Thread done khr",.{}); @panic("");},
-        c.VK_OPERATION_DEFERRED_KHR => {std.log.err("Operation deferred khr",.{}); @panic("");},
-        c.VK_OPERATION_NOT_DEFERRED_KHR => {std.log.err("Operation not deferred khr",.{}); @panic("");},
-        c.VK_ERROR_COMPRESSION_EXHAUSTED_EXT => {std.log.err("Error compression exhausted ext",.{}); @panic("");},
-        c.VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT => {std.log.err("Error incompatible shader binary ext",.{}); @panic("");},
-        else => {std.log.err("Unknown error",.{}); @panic("");}
+        c.VK_SUCCESS => {
+            return;
+        },
+        c.VK_NOT_READY => {
+            std.log.warn("Not ready", .{});
+            return;
+        },
+        c.VK_TIMEOUT => {
+            std.log.warn("Timeout", .{});
+            return;
+        },
+        c.VK_EVENT_SET => {
+            std.log.warn("Event set", .{});
+            return;
+        },
+        c.VK_EVENT_RESET => {
+            std.log.warn("Event reset", .{});
+            return;
+        },
+        c.VK_INCOMPLETE => {
+            std.log.warn("Incomplete", .{});
+            return;
+        },
+        c.VK_ERROR_OUT_OF_HOST_MEMORY => {
+            std.log.err("Error out of host memory", .{});
+            @panic("");
+        },
+        c.VK_ERROR_OUT_OF_DEVICE_MEMORY => {
+            std.log.err("Error out of device memory", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INITIALIZATION_FAILED => {
+            std.log.err("Error initialization failed", .{});
+            @panic("");
+        },
+        c.VK_ERROR_DEVICE_LOST => {
+            std.log.err("Error device lost", .{});
+            @panic("");
+        },
+        c.VK_ERROR_MEMORY_MAP_FAILED => {
+            std.log.err("Error memory map failed", .{});
+            @panic("");
+        },
+        c.VK_ERROR_LAYER_NOT_PRESENT => {
+            std.log.err("Error layer not present", .{});
+            @panic("");
+        },
+        c.VK_ERROR_EXTENSION_NOT_PRESENT => {
+            std.log.err("Error extension not present", .{});
+            @panic("");
+        },
+        c.VK_ERROR_FEATURE_NOT_PRESENT => {
+            std.log.err("Error feature not present", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INCOMPATIBLE_DRIVER => {
+            std.log.err("Error incompatible driver", .{});
+            @panic("");
+        },
+        c.VK_ERROR_TOO_MANY_OBJECTS => {
+            std.log.err("Error too many objects", .{});
+            @panic("");
+        },
+        c.VK_ERROR_FORMAT_NOT_SUPPORTED => {
+            std.log.err("Error format not supported", .{});
+            @panic("");
+        },
+        c.VK_ERROR_FRAGMENTED_POOL => {
+            std.log.err("Error fragmented pool", .{});
+            @panic("");
+        },
+        c.VK_ERROR_UNKNOWN => {
+            std.log.err("Error unknown", .{});
+            @panic("");
+        },
+        c.VK_ERROR_OUT_OF_POOL_MEMORY => {
+            std.log.err("Error out of pool memory", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INVALID_EXTERNAL_HANDLE => {
+            std.log.err("Error invalid external handle", .{});
+            @panic("");
+        },
+        c.VK_ERROR_FRAGMENTATION => {
+            std.log.err("Error fragmentation", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS => {
+            std.log.err("Error invalid opaque capture address", .{});
+            @panic("");
+        },
+        c.VK_PIPELINE_COMPILE_REQUIRED => {
+            std.log.err("Pipeline compile required", .{});
+            @panic("");
+        },
+        c.VK_ERROR_SURFACE_LOST_KHR => {
+            std.log.err("Error surface lost khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_NATIVE_WINDOW_IN_USE_KHR => {
+            std.log.err("Error native window in use khr", .{});
+            @panic("");
+        },
+        c.VK_SUBOPTIMAL_KHR => {
+            std.log.err("Suboptimal khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_OUT_OF_DATE_KHR => {
+            std.log.err("Error out of date khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INCOMPATIBLE_DISPLAY_KHR => {
+            std.log.err("Error incompatible display khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_VALIDATION_FAILED_EXT => {
+            std.log.err("Error validation failed ext", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INVALID_SHADER_NV => {
+            std.log.err("Error invalid shader nv", .{});
+            @panic("");
+        },
+        c.VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR => {
+            std.log.err("Error image usage not supported khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR => {
+            std.log.err("Error video picture layout not supported khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR => {
+            std.log.err("Error video profile operation not supported khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR => {
+            std.log.err("Error video profile format not supported khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR => {
+            std.log.err("Error video profile codec not supported khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR => {
+            std.log.err("Error video std version not supported khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT => {
+            std.log.err("Error invalid drm format modifier plane layout ext", .{});
+            @panic("");
+        },
+        c.VK_ERROR_NOT_PERMITTED_KHR => {
+            std.log.err("Error not permitted khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT => {
+            std.log.err("Error full screen exclusive mode lost ext", .{});
+            @panic("");
+        },
+        c.VK_THREAD_IDLE_KHR => {
+            std.log.err("Thread idle khr", .{});
+            @panic("");
+        },
+        c.VK_THREAD_DONE_KHR => {
+            std.log.err("Thread done khr", .{});
+            @panic("");
+        },
+        c.VK_OPERATION_DEFERRED_KHR => {
+            std.log.err("Operation deferred khr", .{});
+            @panic("");
+        },
+        c.VK_OPERATION_NOT_DEFERRED_KHR => {
+            std.log.err("Operation not deferred khr", .{});
+            @panic("");
+        },
+        c.VK_ERROR_COMPRESSION_EXHAUSTED_EXT => {
+            std.log.err("Error compression exhausted ext", .{});
+            @panic("");
+        },
+        c.VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT => {
+            std.log.err("Error incompatible shader binary ext", .{});
+            @panic("");
+        },
+        else => {
+            std.log.err("Unknown error", .{});
+            @panic("");
+        },
     }
 }

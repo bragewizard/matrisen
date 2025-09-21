@@ -1,4 +1,4 @@
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const buffer = @import("buffers.zig");
@@ -6,7 +6,7 @@ const commands = @import("commands.zig");
 const std = @import("std");
 const log = std.log.scoped(.images);
 const AsyncContext = @import("commands.zig").AsyncContext;
-const Vec4 = @import("geometry").Vec4(f32);
+const Vec4 = @import("linalg").Vec4(f32);
 const Core = @import("core.zig");
 
 textures: [6]AllocatedImage(1) = undefined,

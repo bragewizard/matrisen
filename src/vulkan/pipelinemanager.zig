@@ -1,10 +1,10 @@
 const std = @import("std");
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const debug = @import("debug.zig");
 const check_vk = debug.check_vk;
 const check_vk_panic = debug.check_vk_panic;
 const buffers = @import("buffers.zig");
-const geometry = @import("geometry");
+const geometry = @import("linalg");
 const images = @import("images.zig");
 const Core = @import("core.zig");
 const FrameContext = @import("commands.zig").FrameContexts.Context;
@@ -220,7 +220,7 @@ pub fn createShaderModule(
 ) ?c.VkShaderModule {
     std.debug.assert(code.len % 4 == 0);
 
-    const data: *const u32 = @alignCast(@ptrCast(code.ptr));
+    const data: *const u32 = @ptrCast(@alignCast(code.ptr));
 
     const shader_module_ci: c.VkShaderModuleCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,

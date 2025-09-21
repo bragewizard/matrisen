@@ -6,10 +6,10 @@
 
 const std = @import("std");
 const debug = @import("debug.zig");
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const commands = @import("commands.zig");
 const buffer = @import("buffers.zig");
-const geometry = @import("geometry");
+const geometry = @import("linalg");
 const descritpormanager = @import("descriptormanager.zig");
 const Mat4x4 = geometry.Mat4x4(f32);
 const ResourceEntry = buffer.ResourceEntry;

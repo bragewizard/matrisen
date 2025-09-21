@@ -23,10 +23,12 @@ pub fn build(b: *Build) !void {
     options.addOption([]const u8, "version", version_opt);
 
     const exe = b.addExecutable(.{
+        .root_module = b.createModule(.{
+            .optimize = optimize,
+            .target = target,
+            .root_source_file = b.path("src/main.zig"),
+        }),
         .name = "matrisen",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
     });
 
     exe.root_module.addOptions("config", options);
@@ -51,12 +53,12 @@ pub fn build(b: *Build) !void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const geometry = b.createModule(.{
+    const linalg = b.createModule(.{
         .target = target,
         .optimize = optimize,
-        .root_source_file = b.path("src/geometry.zig"),
+        .root_source_file = b.path("src/linalg.zig"),
     });
-    exe.root_module.addImport("geometry", geometry);
+    exe.root_module.addImport("linalg", linalg);
 
     // const pipelines = b.createModule(.{
     //     .target = target,
@@ -72,31 +74,31 @@ pub fn build(b: *Build) !void {
     });
     exe.root_module.addImport("clibs", clibs);
 
-    const bench = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .root_source_file = b.path("benchmarking.zig"),
-    });
+    // const bench = b.createModule(.{
+    // .target = target,
+    // .optimize = optimize,
+    // .root_source_file = b.path("benchmarking.zig"),
+    // });
 
     const test_step = b.step("test", "Run unit tests");
-    const unittest = b.addTest(.{ .root_module = geometry });
+    const unittest = b.addTest(.{ .root_module = linalg });
     const run_test = b.addRunArtifact(unittest);
     test_step.dependOn(&run_test.step);
 
-    const bench_geometry = b.addExecutable(.{
-        .name = "bench-geometry",
-        .root_source_file = b.path("src/geometry.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const install_bench = b.addInstallArtifact(bench_geometry, .{});
-    const run_bench = b.addRunArtifact(bench_geometry);
-    const bench_step = b.step("bench", "Run the bench");
-    bench_step.dependOn(&run_bench.step);
-    bench_step.dependOn(&install_bench.step);
+    // const bench_geometry = b.addExecutable(.{
+    // .name = "bench-geometry",
+    // .root_source_file = b.path("src/geometry.zig"),
+    // .target = target,
+    // .optimize = optimize,
+    // });
+    // const install_bench = b.addInstallArtifact(bench_geometry, .{});
+    // const run_bench = b.addRunArtifact(bench_geometry);
+    // const bench_step = b.step("bench", "Run the bench");
+    // bench_step.dependOn(&run_bench.step);
+    // bench_step.dependOn(&install_bench.step);
 
-    bench_geometry.root_module.addImport("benchmarking", bench);
-    bench_geometry.root_module.addImport("geometry", geometry);
+    // bench_geometry.root_module.addImport("benchmarking", bench);
+    // bench_geometry.root_module.addImport("geometry", geometry);
 }
 
 fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {

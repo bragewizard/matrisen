@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const Core = @import("vulkan/core.zig");
 const Swapchain = @import("vulkan/swapchain.zig");
 const Window = @import("window.zig");
@@ -13,7 +13,7 @@ const SceneDataUniform = buffer.SceneDataUniform;
 const Allocator = @import("vulkan/descriptormanager.zig").Allocator;
 const Writer = @import("vulkan/descriptormanager.zig").Writer;
 const log = std.log.scoped(.app);
-const geometry = @import("geometry");
+const geometry = @import("linalg");
 const Quat = geometry.Quat(f32);
 const Vec3 = geometry.Vec3(f32);
 const Vec4 = geometry.Vec4(f32);
@@ -22,7 +22,7 @@ const Mat4x4 = geometry.Mat4x4(f32);
 const Self = @This();
 
 pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4) void {
-    var scene_uniform_data: *SceneDataUniform = @alignCast(@ptrCast(frame.buffers.scenedata.info.pMappedData.?));
+    var scene_uniform_data: *SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
     scene_uniform_data.view = view;
     scene_uniform_data.proj = Mat4x4.perspective(
         std.math.degreesToRadians(60.0),
@@ -35,7 +35,7 @@ pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4) void {
     scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
     scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
-    var poses: *[2]Mat4x4 = @alignCast(@ptrCast(frame.buffers.poses.info.pMappedData.?));
+    var poses: *[2]Mat4x4 = @ptrCast(@alignCast(frame.buffers.poses.info.pMappedData.?));
 
     var time: f32 = @floatFromInt(core.framenumber);
     time /= 100;
@@ -111,7 +111,7 @@ pub fn initScene(core: *Core) void {
 
         const adr = buffer.getDeviceAddress(core, frame.buffers.poses);
 
-        var scene_uniform_data: *buffer.SceneDataUniform = @alignCast(@ptrCast(frame.buffers.scenedata.info.pMappedData.?));
+        var scene_uniform_data: *buffer.SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
         scene_uniform_data.pose_buffer_address = adr;
 
         frame.sets[0] = frame.descriptors.allocate(core.device.handle, pipelines.vertexshader.scenedatalayout, null);
@@ -200,7 +200,7 @@ pub fn initScene(core: *Core) void {
     buffer.upload(core, std.mem.sliceAsBytes(indc), core.buffers.index);
     buffer.upload(core, std.mem.sliceAsBytes(result), core.buffers.vertex);
     const adr = buffer.getDeviceAddress(core, core.buffers.vertex);
-    var drawcommands: *c.VkDrawIndexedIndirectCommand = @alignCast(@ptrCast(core.buffers.indirect.info.pMappedData.?));
+    var drawcommands: *c.VkDrawIndexedIndirectCommand = @ptrCast(@alignCast(core.buffers.indirect.info.pMappedData.?));
     drawcommands.firstIndex = 0;
     drawcommands.firstInstance = 0;
     drawcommands.indexCount = 240; //240
@@ -208,7 +208,7 @@ pub fn initScene(core: *Core) void {
     drawcommands.vertexOffset = 199;
 
     for (&core.framecontexts.frames) |*frame| {
-        var scene_uniform_data: *buffer.SceneDataUniform = @alignCast(@ptrCast(frame.buffers.scenedata.info.pMappedData.?));
+        var scene_uniform_data: *buffer.SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
         scene_uniform_data.vertex_buffer_address = adr;
     }
 }

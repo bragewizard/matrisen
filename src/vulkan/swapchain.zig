@@ -1,4 +1,4 @@
-const c = @import("clibs");
+const c = @import("clibs").libs;
 const std = @import("std");
 const debug = @import("debug.zig");
 const Core = @import("core.zig");
@@ -242,11 +242,23 @@ pub fn resize(core: *Core) void {
         @panic("Failed to wait for device idle");
     };
     deinit(core);
-    c.vmaDestroyImage(core.gpuallocator, core.images.colorattachment.image, core.images.colorattachment.allocation,);
+    c.vmaDestroyImage(
+        core.gpuallocator,
+        core.images.colorattachment.image,
+        core.images.colorattachment.allocation,
+    );
     c.vkDestroyImageView(core.device.handle, core.images.colorattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.images.resolvedattachment.image, core.images.resolvedattachment.allocation,);
+    c.vmaDestroyImage(
+        core.gpuallocator,
+        core.images.resolvedattachment.image,
+        core.images.resolvedattachment.allocation,
+    );
     c.vkDestroyImageView(core.device.handle, core.images.resolvedattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.images.depthstencilattachment.image, core.images.depthstencilattachment.allocation,);
+    c.vmaDestroyImage(
+        core.gpuallocator,
+        core.images.depthstencilattachment.image,
+        core.images.depthstencilattachment.allocation,
+    );
     c.vkDestroyImageView(core.device.handle, core.images.depthstencilattachment.views[0], null);
     for (core.images.swapchain_views) |view| {
         c.vkDestroyImageView(core.device.handle, view, null);

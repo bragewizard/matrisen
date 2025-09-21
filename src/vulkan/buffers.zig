@@ -13,8 +13,8 @@
 //!
 
 const std = @import("std");
-const c = @import("clibs");
-const geometry = @import("geometry");
+const c = @import("clibs").libs;
+const geometry = @import("linalg");
 const commands = @import("commands.zig");
 const debug = @import("debug.zig");
 const Vec3 = geometry.Vec3(f32);
