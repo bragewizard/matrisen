@@ -25,9 +25,9 @@ const Self = @This();
 
 pub fn init(self: *Self, core: *Core) void {
     {
-        var builder: LayoutBuilder = .init(core.cpuallocator);
-        defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        var builder: LayoutBuilder = .init();
+        defer builder.deinit(core.cpuallocator);
+        builder.add_binding(core.cpuallocator, 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         self.scenedatalayout = builder.build(
             core.device.handle,
             c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -36,9 +36,9 @@ pub fn init(self: *Self, core: *Core) void {
         );
     }
     {
-        var builder: LayoutBuilder = .init(core.cpuallocator);
-        defer builder.deinit();
-        builder.add_binding(0, c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        var builder: LayoutBuilder = .init();
+        defer builder.deinit(core.cpuallocator);
+        builder.add_binding(core.cpuallocator, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         self.resourcelayout = builder.build(
             core.device.handle,
             c.VK_SHADER_STAGE_MESH_BIT_EXT | c.VK_SHADER_STAGE_FRAGMENT_BIT,

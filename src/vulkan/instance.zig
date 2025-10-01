@@ -139,7 +139,7 @@ pub fn default_debug_callback(
     msg_type: c.VkDebugUtilsMessageTypeFlagsEXT,
     callback_data: ?*const c.VkDebugUtilsMessengerCallbackDataEXT,
     user_data: ?*anyopaque,
-) callconv(.C) c.VkBool32 {
+) callconv(.c) c.VkBool32 {
     _ = user_data;
     const severity_str = switch (severity) {
         c.VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT => "verbose",

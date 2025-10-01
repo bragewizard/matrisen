@@ -12,21 +12,26 @@ const FrameContext = @import("commands.zig").FrameContexts.Context;
 pub const LayoutBuilder = struct {
     bindings: std.ArrayList(c.VkDescriptorSetLayoutBinding) = undefined,
 
-    pub fn init(alloc: std.mem.Allocator) LayoutBuilder {
-        return .{ .bindings = .init(alloc) };
+    pub fn init() LayoutBuilder {
+        return .{ .bindings = .empty };
     }
 
-    pub fn deinit(self: *LayoutBuilder) void {
-        self.bindings.deinit();
+    pub fn deinit(self: *LayoutBuilder, gpa: std.mem.Allocator) void {
+        self.bindings.deinit(gpa);
     }
 
-    pub fn add_binding(self: *LayoutBuilder, binding: u32, descriptor_type: c.VkDescriptorType) void {
+    pub fn add_binding(
+        self: *LayoutBuilder,
+        a: std.mem.Allocator,
+        binding: u32,
+        descriptor_type: c.VkDescriptorType,
+    ) void {
         const new_binding: c.VkDescriptorSetLayoutBinding = .{
             .binding = binding,
             .descriptorType = descriptor_type,
             .descriptorCount = 1,
         };
-        self.bindings.append(new_binding) catch @panic("Failed to append to bindings");
+        self.bindings.append(a, new_binding) catch @panic("Failed to append to bindings");
     }
 
     pub fn clear(self: *LayoutBuilder) void {
@@ -77,47 +82,53 @@ pub const Allocator = struct {
         pool_ratios: []PoolSizeRatio,
         alloc: std.mem.Allocator,
     ) void {
-        self.ratios = .init(alloc);
-        self.ratios.clearAndFree();
-        self.ready_pools = .init(alloc);
-        self.full_pools = .init(alloc);
+        self.ratios = .empty;
+        self.ratios.clearAndFree(alloc);
+        self.ready_pools = .empty;
+        self.full_pools = .empty;
 
-        self.ratios.appendSlice(pool_ratios) catch @panic("Failed to append to ratios");
+        self.ratios.appendSlice(alloc, pool_ratios) catch @panic("Failed to append to ratios");
         const new_pool = create_pool(device, initial_sets, pool_ratios, std.heap.page_allocator);
         self.sets_per_pool = @intFromFloat(@as(f32, @floatFromInt(initial_sets)) * 1.5);
-        self.ready_pools.append(new_pool) catch @panic("Failed to append to ready_pools");
+        self.ready_pools.append(alloc, new_pool) catch @panic("Failed to append to ready_pools");
     }
 
-    pub fn deinit(self: *@This(), device: c.VkDevice) void {
-        self.clear_pools(device);
-        self.destroy_pools(device);
-        self.ready_pools.deinit();
-        self.full_pools.deinit();
-        self.ratios.deinit();
+    pub fn deinit(self: *@This(), device: c.VkDevice, a: std.mem.Allocator) void {
+        self.clear_pools(device, a);
+        self.destroy_pools(device, a);
+        self.ready_pools.deinit(a);
+        self.full_pools.deinit(a);
+        self.ratios.deinit(a);
     }
 
-    pub fn clear_pools(self: *@This(), device: c.VkDevice) void {
+    pub fn clear_pools(self: *@This(), device: c.VkDevice, a: std.mem.Allocator) void {
         for (self.ready_pools.items) |pool| {
             _ = c.vkResetDescriptorPool(device, pool, 0);
         }
         for (self.full_pools.items) |pool| {
             _ = c.vkResetDescriptorPool(device, pool, 0);
         }
-        self.full_pools.clearAndFree();
+        self.full_pools.clearAndFree(a);
     }
 
-    pub fn destroy_pools(self: *@This(), device: c.VkDevice) void {
+    pub fn destroy_pools(self: *@This(), device: c.VkDevice, a: std.mem.Allocator) void {
         for (self.ready_pools.items) |pool| {
             _ = c.vkDestroyDescriptorPool(device, pool, null);
         }
-        self.ready_pools.clearAndFree();
+        self.ready_pools.clearAndFree(a);
         for (self.full_pools.items) |pool| {
             _ = c.vkDestroyDescriptorPool(device, pool, null);
         }
-        self.full_pools.clearAndFree();
+        self.full_pools.clearAndFree(a);
     }
 
-    pub fn allocate(self: *@This(), device: c.VkDevice, layout: c.VkDescriptorSetLayout, pNext: ?*anyopaque) c.VkDescriptorSet {
+    pub fn allocate(
+        self: *@This(),
+        a: std.mem.Allocator,
+        device: c.VkDevice,
+        layout: c.VkDescriptorSetLayout,
+        pNext: ?*anyopaque,
+    ) c.VkDescriptorSet {
         var pool_to_use = self.get_pool(device);
 
         var info = c.VkDescriptorSetAllocateInfo{
@@ -130,14 +141,14 @@ pub const Allocator = struct {
         var descriptor_set: c.VkDescriptorSet = undefined;
         const result = c.vkAllocateDescriptorSets(device, &info, &descriptor_set);
         if (result == c.VK_ERROR_OUT_OF_POOL_MEMORY or result == c.VK_ERROR_FRAGMENTED_POOL) {
-            self.full_pools.append(pool_to_use) catch @panic("Failed to append to full_pools");
+            self.full_pools.append(a, pool_to_use) catch @panic("Failed to append to full_pools");
             pool_to_use = self.get_pool(device);
             info.descriptorPool = pool_to_use;
             check_vk(c.vkAllocateDescriptorSets(device, &info, &descriptor_set)) catch {
                 @panic("Failed to allocate descriptor set");
             };
         }
-        self.ready_pools.append(pool_to_use) catch @panic("Failed to append to full_pools");
+        self.ready_pools.append(a, pool_to_use) catch @panic("Failed to append to full_pools");
         return descriptor_set;
     }
 
@@ -161,14 +172,14 @@ pub const Allocator = struct {
         pool_ratios: []PoolSizeRatio,
         alloc: std.mem.Allocator,
     ) c.VkDescriptorPool {
-        var pool_sizes: std.ArrayList(c.VkDescriptorPoolSize) = .init(alloc);
-        defer pool_sizes.deinit();
+        var pool_sizes: std.ArrayList(c.VkDescriptorPoolSize) = .empty;
+        defer pool_sizes.deinit(alloc);
         for (pool_ratios) |ratio| {
             const size = c.VkDescriptorPoolSize{
                 .type = ratio.type,
                 .descriptorCount = set_count * @as(u32, @intFromFloat(ratio.ratio)),
             };
-            pool_sizes.append(size) catch @panic("Failed to append to pool_sizes");
+            pool_sizes.append(alloc, size) catch @panic("Failed to append to pool_sizes");
         }
 
         const info = c.VkDescriptorPoolCreateInfo{
@@ -191,22 +202,23 @@ pub const Writer = struct {
     buffer_infos: std.ArrayList(c.VkDescriptorBufferInfo) = undefined,
     image_infos: std.ArrayList(c.VkDescriptorImageInfo) = undefined,
 
-    pub fn init(allocator: std.mem.Allocator) @This() {
+    pub fn init() @This() {
         return .{
-            .writes = .init(allocator),
-            .buffer_infos = .init(allocator),
-            .image_infos = .init(allocator),
+            .writes = .empty,
+            .buffer_infos = .empty,
+            .image_infos = .empty,
         };
     }
 
-    pub fn deinit(self: *@This()) void {
-        self.writes.deinit();
-        self.buffer_infos.deinit();
-        self.image_infos.deinit();
+    pub fn deinit(self: *@This(), a: std.mem.Allocator) void {
+        self.writes.deinit(a);
+        self.buffer_infos.deinit(a);
+        self.image_infos.deinit(a);
     }
 
     pub fn writeBuffer(
         self: *@This(),
+        a: std.mem.Allocator,
         binding: u32,
         buffer: c.VkBuffer,
         size: usize,
@@ -217,7 +229,7 @@ pub const Writer = struct {
             var info: c.VkDescriptorBufferInfo = c.VkDescriptorBufferInfo{};
         };
         info_container.info = c.VkDescriptorBufferInfo{ .buffer = buffer, .offset = offset, .range = size };
-        self.buffer_infos.append(info_container.info) catch @panic("failed to append");
+        self.buffer_infos.append(a, info_container.info) catch @panic("failed to append");
         const write = c.VkWriteDescriptorSet{
             .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = binding,
@@ -226,11 +238,12 @@ pub const Writer = struct {
             .descriptorType = ty,
             .pBufferInfo = &info_container.info,
         };
-        self.writes.append(write) catch @panic("failed to append");
+        self.writes.append(a, write) catch @panic("failed to append");
     }
 
     pub fn writeImage(
         self: *@This(),
+        a: std.mem.Allocator,
         binding: u32,
         image: c.VkImageView,
         sampler: c.VkSampler,
@@ -242,7 +255,7 @@ pub const Writer = struct {
         };
         info_container.info = c.VkDescriptorImageInfo{ .sampler = sampler, .imageView = image, .imageLayout = layout };
 
-        self.image_infos.append(info_container.info) catch @panic("append failed");
+        self.image_infos.append(a, info_container.info) catch @panic("append failed");
         const write = c.VkWriteDescriptorSet{
             .sType = c.VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = binding,
@@ -251,13 +264,13 @@ pub const Writer = struct {
             .descriptorType = ty,
             .pImageInfo = &info_container.info,
         };
-        self.writes.append(write) catch @panic("append failed");
+        self.writes.append(a, write) catch @panic("append failed");
     }
 
-    pub fn clear(self: *@This()) void {
-        self.writes.clearAndFree();
-        self.buffer_infos.clearAndFree();
-        self.image_infos.clearAndFree();
+    pub fn clear(self: *@This(), a: std.mem.Allocator) void {
+        self.writes.clearAndFree(a);
+        self.buffer_infos.clearAndFree(a);
+        self.image_infos.clearAndFree(a);
     }
 
     pub fn updateSet(self: *@This(), device: c.VkDevice, set: c.VkDescriptorSet) void {

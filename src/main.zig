@@ -4,11 +4,11 @@ const loop = @import("gameloop.zig");
 const Window = @import("window.zig");
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-
-    var window : Window = .init(1200,1000);
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    const allocator = debug_allocator.allocator();
+    var window: Window = .init(1200, 1000);
     defer window.deinit();
-    var engine : vulkanbackend = .init(allocator, &window);
+    var engine: vulkanbackend = .init(allocator, &window);
     defer engine.deinit();
     loop.loop(&engine, &window);
 }

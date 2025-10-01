@@ -1,7 +1,3 @@
-///
-/// glTF™ 2.0 Specification is available here:
-/// https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html
-///
 const Gltf = @This();
 
 const std = @import("std");
@@ -239,7 +235,7 @@ pub fn getLocalTransform(node: Node) Mat4 {
             };
         }
 
-        break :blk helpers.recompose(
+        break :blk linalg.recompose(
             node.translation,
             node.rotation,
             node.scale,
@@ -255,7 +251,7 @@ pub fn getGlobalTransform(data: *const Data, node: Node) Mat4 {
         const parent = data.nodes[parent_index.?];
         const parent_transform = getLocalTransform(parent);
 
-        node_transform = helpers.mul(parent_transform, node_transform);
+        node_transform = linalg.mul(parent_transform, node_transform);
         parent_index = parent.parent;
     }
 

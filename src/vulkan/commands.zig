@@ -272,7 +272,7 @@ pub const FrameContexts = struct {
             c.vkDestroyFence(core.device.handle, frame.render_fence, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
             c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
-            frame.descriptors.deinit(core.device.handle);
+            frame.descriptors.deinit(core.device.handle, core.cpuallocator);
             frame.destroyBuffers(core);
         }
     }

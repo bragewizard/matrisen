@@ -66,20 +66,23 @@ pub fn initScene(core: *Core) void {
 
     const pipelines = &core.pipelines;
     core.sets[0] = core.descriptorallocator.allocate(
+        core.cpuallocator,
         core.device.handle,
         pipelines.vertexshader.resourcelayout,
         null,
     );
     core.sets[1] = core.descriptorallocator.allocate(
+        core.cpuallocator,
         core.device.handle,
         pipelines.meshshader.resourcelayout,
         null,
     );
 
     {
-        var writer = Writer.init(core.cpuallocator);
-        defer writer.deinit();
+        var writer = Writer.init();
+        defer writer.deinit(core.cpuallocator);
         writer.writeBuffer(
+            core.cpuallocator,
             0,
             core.buffers.resourcetable.buffer,
             @sizeOf(buffer.ResourceEntry) * 2,
@@ -114,12 +117,23 @@ pub fn initScene(core: *Core) void {
         var scene_uniform_data: *buffer.SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
         scene_uniform_data.pose_buffer_address = adr;
 
-        frame.sets[0] = frame.descriptors.allocate(core.device.handle, pipelines.vertexshader.scenedatalayout, null);
-        frame.sets[1] = frame.descriptors.allocate(core.device.handle, pipelines.meshshader.scenedatalayout, null);
+        frame.sets[0] = frame.descriptors.allocate(
+            core.cpuallocator,
+            core.device.handle,
+            pipelines.vertexshader.scenedatalayout,
+            null,
+        );
+        frame.sets[1] = frame.descriptors.allocate(
+            core.cpuallocator,
+            core.device.handle,
+            pipelines.meshshader.scenedatalayout,
+            null,
+        );
         {
-            var writer = Writer.init(core.cpuallocator);
-            defer writer.deinit();
+            var writer = Writer.init();
+            defer writer.deinit(core.cpuallocator);
             writer.writeBuffer(
+                core.cpuallocator,
                 0,
                 frame.buffers.scenedata.buffer,
                 @sizeOf(buffer.SceneDataUniform),
@@ -130,7 +144,7 @@ pub fn initScene(core: *Core) void {
             writer.updateSet(core.device.handle, frame.sets[1]);
         }
     }
-    const ico = gltf.load_meshes(core.cpuallocator, "assets/icosphere.glb") catch @panic("Failed to load mesh");
+    // const ico = gltf.load_meshes(core.cpuallocator, "assets/icosphere.glb") catch @panic("Failed to load mesh");
     const numlinesx = 99;
     const numlinesy = 99;
     const totalLines = numlinesx + numlinesy + 1;
@@ -184,21 +198,21 @@ pub fn initScene(core: *Core) void {
     const p1: Vec3 = .new(0, 0, halfDepth); // X extent fixed
     const p2: Vec4 = .zeros;
     lines[i + j] = .new(p0, p1, p2, 0.2, zcol);
-    const icoverts = ico.items[0].vertices;
+    // const icoverts = ico.items[0].vertices;
     // for (icoverts) |v| {
     //     std.debug.print("{}", .{v.position});
     // }
-    const total_len = icoverts.len + lines.len;
+    // const total_len = icoverts.len + lines.len;
     // const total_len = icoverts.len;
-    const result = core.cpuallocator.alloc(Vertex, total_len) catch @panic("");
-    @memcpy(result[0..lines.len], lines[0..]);
-    @memcpy(result[lines.len..], icoverts[0..]);
-    defer core.cpuallocator.free(result);
-    const indc = ico.items[0].indices;
-    core.buffers.vertex = buffer.createSSBO(core, @sizeOf(Vertex) * result.len, true);
-    core.buffers.index = buffer.createIndex(core, @sizeOf(u32) * indc.len);
-    buffer.upload(core, std.mem.sliceAsBytes(indc), core.buffers.index);
-    buffer.upload(core, std.mem.sliceAsBytes(result), core.buffers.vertex);
+    // const result = core.cpuallocator.alloc(Vertex, total_len) catch @panic("");
+    // @memcpy(result[0..lines.len], lines[0..]);
+    // @memcpy(result[lines.len..], icoverts[0..]);
+    // defer core.cpuallocator.free(result);
+    // const indc = ico.items[0].indices;
+    // core.buffers.vertex = buffer.createSSBO(core, @sizeOf(Vertex) * result.len, true);
+    // core.buffers.index = buffer.createIndex(core, @sizeOf(u32) * indc.len);
+    // buffer.upload(core, std.mem.sliceAsBytes(indc), core.buffers.index);
+    // buffer.upload(core, std.mem.sliceAsBytes(result), core.buffers.vertex);
     const adr = buffer.getDeviceAddress(core, core.buffers.vertex);
     var drawcommands: *c.VkDrawIndexedIndirectCommand = @ptrCast(@alignCast(core.buffers.indirect.info.pMappedData.?));
     drawcommands.firstIndex = 0;

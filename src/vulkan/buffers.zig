@@ -7,10 +7,6 @@
 //! TODO make function for creating model buffer
 //! TODO make function for creating material buffer
 //!
-//!
-//!
-//!
-//!
 
 const std = @import("std");
 const c = @import("clibs").libs;
@@ -25,8 +21,9 @@ const FrameContext = @import("commands.zig").FrameContext;
 const Mat4x4 = geometry.Mat4x4(f32);
 
 const Self = @This();
-pub const frames_in_flight = 2;
+pub const frames_in_flight = 2; // TODO: move this to app land
 
+/// Dynamic TODO: move this to app section not lib
 const Scene = struct {
     vertex: AllocatedBuffer, // Vulkan buffer for vertices
     index: AllocatedBuffer, // Vulkan buffer for indices
