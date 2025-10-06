@@ -71,12 +71,12 @@ pub fn initScene(core: *Core) void {
         pipelines.vertexshader.resourcelayout,
         null,
     );
-    core.sets[1] = core.descriptorallocator.allocate(
-        core.cpuallocator,
-        core.device.handle,
-        pipelines.meshshader.resourcelayout,
-        null,
-    );
+    // core.sets[1] = core.descriptorallocator.allocate(
+    //     core.cpuallocator,
+    //     core.device.handle,
+    //     pipelines.meshshader.resourcelayout,
+    //     null,
+    // );
 
     {
         var writer = Writer.init();
@@ -90,7 +90,7 @@ pub fn initScene(core: *Core) void {
             c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         );
         writer.updateSet(core.device.handle, core.sets[0]);
-        writer.updateSet(core.device.handle, core.sets[1]);
+        // writer.updateSet(core.device.handle, core.sets[1]);
     }
 
     // Per frame
@@ -123,12 +123,12 @@ pub fn initScene(core: *Core) void {
             pipelines.vertexshader.scenedatalayout,
             null,
         );
-        frame.sets[1] = frame.descriptors.allocate(
-            core.cpuallocator,
-            core.device.handle,
-            pipelines.meshshader.scenedatalayout,
-            null,
-        );
+        // frame.sets[1] = frame.descriptors.allocate(
+        //     core.cpuallocator,
+        //     core.device.handle,
+        //     pipelines.meshshader.scenedatalayout,
+        //     null,
+        // );
         {
             var writer = Writer.init();
             defer writer.deinit(core.cpuallocator);
@@ -141,7 +141,7 @@ pub fn initScene(core: *Core) void {
                 c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             );
             writer.updateSet(core.device.handle, frame.sets[0]);
-            writer.updateSet(core.device.handle, frame.sets[1]);
+            // writer.updateSet(core.device.handle, frame.sets[1]);
         }
     }
     // const ico = gltf.load_meshes(core.cpuallocator, "assets/icosphere.glb") catch @panic("Failed to load mesh");
@@ -213,18 +213,18 @@ pub fn initScene(core: *Core) void {
     // core.buffers.index = buffer.createIndex(core, @sizeOf(u32) * indc.len);
     // buffer.upload(core, std.mem.sliceAsBytes(indc), core.buffers.index);
     // buffer.upload(core, std.mem.sliceAsBytes(result), core.buffers.vertex);
-    const adr = buffer.getDeviceAddress(core, core.buffers.vertex);
-    var drawcommands: *c.VkDrawIndexedIndirectCommand = @ptrCast(@alignCast(core.buffers.indirect.info.pMappedData.?));
-    drawcommands.firstIndex = 0;
-    drawcommands.firstInstance = 0;
-    drawcommands.indexCount = 240; //240
-    drawcommands.instanceCount = 1;
-    drawcommands.vertexOffset = 199;
+    // const adr = buffer.getDeviceAddress(core, core.buffers.vertex);
+    // var drawcommands: *c.VkDrawIndexedIndirectCommand = @ptrCast(@alignCast(core.buffers.indirect.info.pMappedData.?));
+    // drawcommands.firstIndex = 0;
+    // drawcommands.firstInstance = 0;
+    // drawcommands.indexCount = 240; //240
+    // drawcommands.instanceCount = 1;
+    // drawcommands.vertexOffset = 199;
 
-    for (&core.framecontexts.frames) |*frame| {
-        var scene_uniform_data: *buffer.SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
-        scene_uniform_data.vertex_buffer_address = adr;
-    }
+    // for (&core.framecontexts.frames) |*frame| {
+    // var scene_uniform_data: *buffer.SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
+    // scene_uniform_data.vertex_buffer_address = adr;
+    // }
 }
 
 pub fn loop(engine: *Core, window: *Window) void {
@@ -266,8 +266,8 @@ pub fn loop(engine: *Core, window: *Window) void {
         var frame = &engine.framecontexts.frames[engine.framecontexts.current];
         frame.submitBegin(engine) catch continue;
         uploadSceneData(engine, frame, camerarot.view(camerapos));
-        engine.pipelines.vertexshader.draw(engine, frame);
-        engine.pipelines.meshshader.draw(engine, frame);
+        // engine.pipelines.vertexshader.draw(engine, frame);
+        // engine.pipelines.meshshader.draw(engine, frame);
         frame.submitEnd(engine);
     }
 }

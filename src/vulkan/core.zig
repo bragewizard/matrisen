@@ -90,7 +90,7 @@ pub fn deinit(self: *Self) void {
 }
 
 const Pipelines = struct {
-    meshshader: @import("pipelines/meshshader.zig") = .{},
+    // meshshader: @import("pipelines/meshshader.zig") = .{},
     vertexshader: @import("pipelines/vertexshader.zig") = .{},
 
     pub fn init(core: *Self) void {
