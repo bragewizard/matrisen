@@ -2,13 +2,13 @@ const std = @import("std");
 const c = @import("clibs").libs;
 const check_vk_panic = @import("../debug.zig").check_vk_panic;
 const descriptorbuilder = @import("../descriptormanager.zig");
+const Allocator = descriptorbuilder.Allocator;
 const vk_alloc_cbs = Core.vkallocationcallbacks;
 const buffers = @import("../buffers.zig");
 const geometry = @import("linalg");
 const Vec3 = geometry.Vec3(f32);
 const Vec4 = geometry.Vec4(f32);
 const PipelineBuilder = @import("../pipelinemanager.zig");
-const SceneDataUniform = buffers.SceneDataUniform;
 const FrameContext = @import("../commands.zig").FrameContext;
 const LayoutBuilder = descriptorbuilder.LayoutBuilder;
 const Writer = descriptorbuilder.Writer;
@@ -19,8 +19,28 @@ layout: c.VkPipelineLayout = undefined,
 pipeline: c.VkPipeline = undefined,
 resourcelayout: c.VkDescriptorSetLayout = undefined,
 scenedatalayout: c.VkDescriptorSetLayout = undefined,
+static_set: c.VkDescriptorSet = undefined,
+dynamic_sets: [Core.multibuffering]c.VkDescriptorSet = undefined,
+descriptors: [Core.multibuffering]Allocator = .{.{}} ** Core.multibuffering,
 
 const Self = @This();
+
+pub const SceneDataUniform = extern struct {
+    view: Mat4x4,
+    proj: Mat4x4,
+    viewproj: Mat4x4,
+    ambient_color: Vec4,
+    sunlight_dir: Vec4,
+    sunlight_color: Vec4,
+    pose_buffer_address: c.VkDeviceAddress,
+    vertex_buffer_address: c.VkDeviceAddress,
+};
+
+pub const MaterialConstantsUniform = extern struct {
+    colorfactors: Vec4,
+    metalrough_factors: Vec4,
+    padding: [14]Vec4,
+};
 
 pub fn init(self: *Self, core: *Core) void {
     {
@@ -112,6 +132,29 @@ pub fn init(self: *Self, core: *Core) void {
     pipelineBuilder.enable_blending_additive();
     pipelineBuilder.enable_depthtest(false, c.VK_COMPARE_OP_LESS);
     // self.transparent = pipelineBuilder.build_pipeline(core.device.handle);
+
+    self.static_set = core.descriptorallocator.allocate(
+        core.cpuallocator,
+        core.device.handle,
+        self.resourcelayout,
+        null,
+    );
+
+    var ratios = [_]Allocator.PoolSizeRatio{
+        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
+        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
+        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
+        .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
+    };
+    for (0.., self.descriptors) |i, *descriptor| {
+        descriptor.init(core.device.handle, 1000, &ratios, core.cpuallocator);
+        self.dynamic_sets[i] = descriptor.allocate(
+            core.cpuallocator,
+            core.device.handle,
+            self.scenedatalayout,
+            null,
+        );
+    }
 }
 
 pub fn deinit(self: *Self, core: *Core) void {
@@ -130,4 +173,18 @@ pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
     c.vkCmdDrawIndexedIndirect(cmd, core.buffers.indirect.buffer, 0, 1, @sizeOf(c.VkDrawIndexedIndirectCommand));
     // c.vkCmdDrawIndexed(cmd, 1, 1, 0, 0, 0);
     // c.vkCmdDraw(cmd, 24, 1, 0, 0);
+}
+
+pub fn writeSetSBBO(self: *Self, core: *Core, data: buffers.AllocatedBuffer, T: type) void {
+    var writer = Writer.init();
+    defer writer.deinit(core.cpuallocator);
+    writer.writeBuffer(
+        core.cpuallocator,
+        0,
+        data,
+        @sizeOf(T) * 2,
+        0,
+        c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    );
+    writer.updateSet(core.device.handle, self.static_set);
 }

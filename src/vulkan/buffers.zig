@@ -21,36 +21,12 @@ const FrameContext = @import("commands.zig").FrameContext;
 const Mat4x4 = geometry.Mat4x4(f32);
 
 const Self = @This();
-pub const frames_in_flight = 2; // TODO: move this to app land
 
-/// Dynamic TODO: move this to app section not lib
-const Scene = struct {
-    vertex: AllocatedBuffer, // Vulkan buffer for vertices
-    index: AllocatedBuffer, // Vulkan buffer for indices
-    pose: AllocatedBuffer, // Storage buffer for poses
-    resourcetable: AllocatedBuffer, // Storage buffer for ResourceEntry
-    indirect: AllocatedBuffer, // Indirect draw commands
-    vertex_address: c.VkDeviceAddress,
-    index_address: c.VkDeviceAddress, // Optional, if needed in shader
-    pose_address: c.VkDeviceAddress,
-    resource_entries: []ResourceEntry,
-    poses: []Mat4x4,
-    indirect_commands: []c.VkDrawIndexedIndirectCommand,
-    allocator: std.mem.Allocator, // For dynamic allocations
-};
-
-/// Stays mostly constant
-pub const GlobalBuffers = struct {
+pub const StaticBuffers = struct {
     indirect: AllocatedBuffer = undefined,
     vertex: AllocatedBuffer = undefined,
     index: AllocatedBuffer = undefined, //FIX figure out what to do about indexbuffers as they need to be bound
     resourcetable: AllocatedBuffer = undefined,
-};
-
-/// Varies per frame
-pub const PerFrameBuffers = struct {
-    poses: AllocatedBuffer = undefined,
-    scenedata: AllocatedBuffer = undefined,
 };
 
 pub const ResourceEntry = extern struct {
@@ -60,9 +36,14 @@ pub const ResourceEntry = extern struct {
 };
 
 pub const AllocatedBuffer = struct {
-    buffer: c.VkBuffer, //TODO change to "handle"
+    buffer: c.VkBuffer,
     allocation: c.VmaAllocation,
     info: c.VmaAllocationInfo,
+};
+
+pub const GeoSurface = struct {
+    start_index: u32,
+    count: u32,
 };
 
 pub const Vertex = extern struct {
@@ -81,28 +62,6 @@ pub const Vertex = extern struct {
             .uv_y = y,
         };
     }
-};
-
-pub const SceneDataUniform = extern struct {
-    view: Mat4x4,
-    proj: Mat4x4,
-    viewproj: Mat4x4,
-    ambient_color: Vec4,
-    sunlight_dir: Vec4,
-    sunlight_color: Vec4,
-    pose_buffer_address: c.VkDeviceAddress,
-    vertex_buffer_address: c.VkDeviceAddress,
-};
-
-pub const MaterialConstantsUniform = extern struct {
-    colorfactors: Vec4,
-    metalrough_factors: Vec4,
-    padding: [14]Vec4,
-};
-
-pub const GeoSurface = struct {
-    start_index: u32,
-    count: u32,
 };
 
 pub const MeshAsset = struct {

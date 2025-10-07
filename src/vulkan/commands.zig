@@ -13,24 +13,14 @@ const Device = @import("device.zig").Device;
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const vk_alloc_cbs = @import("core.zig").vkallocationcallbacks;
 
-pub const frames_in_flight = 2;
-
 pub const FrameContext = struct {
     swapchain_semaphore: c.VkSemaphore = null,
     render_semaphore: c.VkSemaphore = null,
     render_fence: c.VkFence = null,
     command_pool: c.VkCommandPool = null,
     command_buffer: c.VkCommandBuffer = null,
-    descriptors: Allocator = .{},
-    buffers: buffers.PerFrameBuffers = undefined,
-    sets: [2]c.VkDescriptorSet = undefined,
     swapchain_image_index: u32 = 0,
     draw_extent: c.VkExtent2D = undefined,
-
-    pub fn destroyBuffers(self: *FrameContext, core: *Core) void {
-        c.vmaDestroyBuffer(core.gpuallocator, self.buffers.scenedata.buffer, self.buffers.scenedata.allocation);
-        c.vmaDestroyBuffer(core.gpuallocator, self.buffers.poses.buffer, self.buffers.poses.allocation);
-    }
 
     pub fn submitBegin(frame: *FrameContext, core: *Core) !void {
         const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
@@ -210,77 +200,72 @@ pub const FrameContext = struct {
     }
 };
 
-pub const FrameContexts = struct {
-    frames: [frames_in_flight]FrameContext = .{FrameContext{}} ** frames_in_flight,
-    current: u8 = 0,
+pub fn FrameContexts(multibuffering: comptime_int) type {
+    return struct {
+        frames: [multibuffering]FrameContext = .{FrameContext{}} ** multibuffering,
+        current: u8 = 0,
 
-    pub fn init(core: *Core) void {
-        const semaphore_ci = c.VkSemaphoreCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        };
-
-        const fence_ci = c.VkFenceCreateInfo{
-            .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .flags = c.VK_FENCE_CREATE_SIGNALED_BIT,
-        };
-
-        for (&core.framecontexts.frames) |*frame| {
-            const command_pool_info = graphics_cmd_pool_info(core.physicaldevice);
-            debug.check_vk_panic(c.vkCreateCommandPool(
-                core.device.handle,
-                &command_pool_info,
-                vk_alloc_cbs,
-                &frame.command_pool,
-            ));
-            const command_buffer_info = graphics_cmdbuffer_info(frame.command_pool);
-            debug.check_vk_panic(c.vkAllocateCommandBuffers(
-                core.device.handle,
-                &command_buffer_info,
-                &frame.command_buffer,
-            ));
-            debug.check_vk_panic(c.vkCreateSemaphore(
-                core.device.handle,
-                &semaphore_ci,
-                vk_alloc_cbs,
-                &frame.swapchain_semaphore,
-            ));
-            debug.check_vk_panic(c.vkCreateSemaphore(
-                core.device.handle,
-                &semaphore_ci,
-                vk_alloc_cbs,
-                &frame.render_semaphore,
-            ));
-            debug.check_vk_panic(c.vkCreateFence(
-                core.device.handle,
-                &fence_ci,
-                vk_alloc_cbs,
-                &frame.render_fence,
-            ));
-            var ratios = [_]Allocator.PoolSizeRatio{
-                .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
-                .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
-                .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
-                .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
+        pub fn init(core: *Core) void {
+            const semaphore_ci = c.VkSemaphoreCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
             };
-            frame.descriptors.init(core.device.handle, 1000, &ratios, core.cpuallocator);
-        }
-    }
 
-    pub fn deinit(core: *Core) void {
-        for (&core.framecontexts.frames) |*frame| {
-            c.vkDestroyCommandPool(core.device.handle, frame.command_pool, vk_alloc_cbs);
-            c.vkDestroyFence(core.device.handle, frame.render_fence, vk_alloc_cbs);
-            c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
-            c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
-            frame.descriptors.deinit(core.device.handle, core.cpuallocator);
-            frame.destroyBuffers(core);
-        }
-    }
+            const fence_ci = c.VkFenceCreateInfo{
+                .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                .flags = c.VK_FENCE_CREATE_SIGNALED_BIT,
+            };
 
-    pub fn switch_frame(self: *FrameContexts) void {
-        self.current = (self.current + 1) % frames_in_flight;
-    }
-};
+            for (&core.framecontexts.frames) |*frame| {
+                const command_pool_info = graphics_cmd_pool_info(core.physicaldevice);
+                debug.check_vk_panic(c.vkCreateCommandPool(
+                    core.device.handle,
+                    &command_pool_info,
+                    vk_alloc_cbs,
+                    &frame.command_pool,
+                ));
+                const command_buffer_info = graphics_cmdbuffer_info(frame.command_pool);
+                debug.check_vk_panic(c.vkAllocateCommandBuffers(
+                    core.device.handle,
+                    &command_buffer_info,
+                    &frame.command_buffer,
+                ));
+                debug.check_vk_panic(c.vkCreateSemaphore(
+                    core.device.handle,
+                    &semaphore_ci,
+                    vk_alloc_cbs,
+                    &frame.swapchain_semaphore,
+                ));
+                debug.check_vk_panic(c.vkCreateSemaphore(
+                    core.device.handle,
+                    &semaphore_ci,
+                    vk_alloc_cbs,
+                    &frame.render_semaphore,
+                ));
+                debug.check_vk_panic(c.vkCreateFence(
+                    core.device.handle,
+                    &fence_ci,
+                    vk_alloc_cbs,
+                    &frame.render_fence,
+                ));
+            }
+        }
+
+        pub fn deinit(core: *Core) void {
+            for (&core.framecontexts.frames) |*frame| {
+                c.vkDestroyCommandPool(core.device.handle, frame.command_pool, vk_alloc_cbs);
+                c.vkDestroyFence(core.device.handle, frame.render_fence, vk_alloc_cbs);
+                c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
+                c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
+                frame.descriptors.deinit(core.device.handle, core.cpuallocator);
+                frame.destroyBuffers(core);
+            }
+        }
+
+        pub fn switch_frame(self: *FrameContexts) void {
+            self.current = (self.current + 1) % multibuffering;
+        }
+    };
+}
 
 pub const AsyncContext = struct {
     fence: c.VkFence = null,

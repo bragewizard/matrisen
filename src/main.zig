@@ -1,14 +1,14 @@
 const std = @import("std");
 const vulkanbackend = @import("vulkan/core.zig");
-const loop = @import("gameloop.zig");
+const app = @import("gameloop.zig");
 const Window = @import("window.zig");
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const allocator = debug_allocator.allocator();
-    var window: Window = .init(1200, 1000);
+    var window: Window = .init(2000, 1200);
     defer window.deinit();
     var engine: vulkanbackend = .init(allocator, &window);
     defer engine.deinit();
-    loop.loop(&engine, &window);
+    app.loop(&engine, &window);
 }

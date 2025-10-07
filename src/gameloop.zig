@@ -5,11 +5,12 @@ const Swapchain = @import("vulkan/swapchain.zig");
 const Window = @import("window.zig");
 const FrameContext = commands.FrameContext;
 const buffer = @import("vulkan/buffers.zig");
+const AllocatedBuffer = buffer.AllocatedBuffer;
 const Vertex = buffer.Vertex;
 const gltf = @import("gltf.zig");
 const commands = @import("vulkan/commands.zig");
 const create = @import("vulkan/buffers.zig").create;
-const SceneDataUniform = buffer.SceneDataUniform;
+const SceneDataUniform = @import("vulkan/pipelines/vertexshader.zig").SceneDataUniform;
 const Allocator = @import("vulkan/descriptormanager.zig").Allocator;
 const Writer = @import("vulkan/descriptormanager.zig").Writer;
 const log = std.log.scoped(.app);
@@ -18,11 +19,35 @@ const Quat = geometry.Quat(f32);
 const Vec3 = geometry.Vec3(f32);
 const Vec4 = geometry.Vec4(f32);
 const Mat4x4 = geometry.Mat4x4(f32);
+const multibuffering = Core.multibuffering;
 
 const Self = @This();
 
-pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4) void {
-    var scene_uniform_data: *SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
+const DynamicData = struct {
+    descriptors: Allocator = .{},
+    poses: AllocatedBuffer = undefined,
+    scenedata: AllocatedBuffer = undefined,
+};
+
+const StaticData = struct {
+    indirect: AllocatedBuffer = undefined,
+    vertex: AllocatedBuffer = undefined,
+    index: AllocatedBuffer = undefined, //FIX figure out what to do about indexbuffers as they need to be bound
+    resourcetable: AllocatedBuffer = undefined,
+};
+
+data: [multibuffering]DynamicData = .{},
+sdata: StaticData = .{},
+
+// pub fn destroyBuffers(self: *FrameContext, core: *Core) void {
+//     c.vmaDestroyBuffer(core.gpuallocator, self.buffers.scenedata.buffer, self.buffers.scenedata.allocation);
+//     c.vmaDestroyBuffer(core.gpuallocator, self.buffers.poses.buffer, self.buffers.poses.allocation);
+// }
+
+pub fn uploadSceneData(self: *Self, core: *Core, view: Mat4x4) void {
+    const current = core.framecontexts.current;
+    var frame = &core.framecontexts.frames[current];
+    var scene_uniform_data: *SceneDataUniform = @ptrCast(@alignCast(self.data[current].scenedata.info.pMappedData.?));
     scene_uniform_data.view = view;
     scene_uniform_data.proj = Mat4x4.perspective(
         std.math.degreesToRadians(60.0),
@@ -35,7 +60,7 @@ pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4) void {
     scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
     scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
-    var poses: *[2]Mat4x4 = @ptrCast(@alignCast(frame.buffers.poses.info.pMappedData.?));
+    var poses: *[2]Mat4x4 = @ptrCast(@alignCast(self.data[current].poses.info.pMappedData.?));
 
     var time: f32 = @floatFromInt(core.framenumber);
     time /= 100;
@@ -46,8 +71,8 @@ pub fn uploadSceneData(core: *Core, frame: *FrameContext, view: Mat4x4) void {
     poses[1] = mod;
 }
 
-// FIX this is only temporary
-pub fn initScene(core: *Core) void {
+// FIX this is temporary, need to move code where it is appropriate
+pub fn initScene(self: *Self, core: *Core) void {
     var sizes = [_]Allocator.PoolSizeRatio{
         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
@@ -61,49 +86,18 @@ pub fn initScene(core: *Core) void {
     const resources: [2]buffer.ResourceEntry = .{ resourses1, resourses2 };
     const resources_slice = std.mem.sliceAsBytes(&resources);
 
-    core.buffers.resourcetable = buffer.createSSBO(core, resources_slice.len, true);
+    self.sdata.resourcetable = buffer.createSSBO(core, resources_slice.len, true);
     buffer.upload(core, resources_slice, core.buffers.resourcetable);
 
-    const pipelines = &core.pipelines;
-    core.sets[0] = core.descriptorallocator.allocate(
-        core.cpuallocator,
-        core.device.handle,
-        pipelines.vertexshader.resourcelayout,
-        null,
-    );
-    // core.sets[1] = core.descriptorallocator.allocate(
-    //     core.cpuallocator,
-    //     core.device.handle,
-    //     pipelines.meshshader.resourcelayout,
-    //     null,
-    // );
-
-    {
-        var writer = Writer.init();
-        defer writer.deinit(core.cpuallocator);
-        writer.writeBuffer(
-            core.cpuallocator,
-            0,
-            core.buffers.resourcetable.buffer,
-            @sizeOf(buffer.ResourceEntry) * 2,
-            0,
-            c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        );
-        writer.updateSet(core.device.handle, core.sets[0]);
-        // writer.updateSet(core.device.handle, core.sets[1]);
-    }
-
-    // Per frame
-    for (&core.framecontexts.frames) |*frame| {
-        frame.buffers.scenedata = buffer.create(
+    for (&self.data) |*data| {
+        data.scenedata = buffer.create(
             core,
-            @sizeOf(buffer.SceneDataUniform),
+            @sizeOf(SceneDataUniform),
             c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             c.VMA_MEMORY_USAGE_CPU_TO_GPU,
         );
 
-        // FIX only two hardcoded poses for the time beeing
-        frame.buffers.poses = buffer.create(
+        data.poses = buffer.create(
             core,
             @sizeOf(Mat4x4) * 2,
             c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
@@ -111,37 +105,26 @@ pub fn initScene(core: *Core) void {
                 c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             c.VMA_MEMORY_USAGE_CPU_TO_GPU,
         );
+    }
 
-        const adr = buffer.getDeviceAddress(core, frame.buffers.poses);
-
-        var scene_uniform_data: *buffer.SceneDataUniform = @ptrCast(@alignCast(frame.buffers.scenedata.info.pMappedData.?));
+    var pipeline = &core.pipelines.vertexshader;
+    pipeline.writeSetSBBO(&core, self.sdata.resourcetable, buffer.ResourceEntry);
+    for (0.., &self.data) |i, *data| {
+        const adr = buffer.getDeviceAddress(core, self.data[i].poses);
+        var scene_uniform_data: *SceneDataUniform = @ptrCast(@alignCast(data.scenedata.info.pMappedData.?));
         scene_uniform_data.pose_buffer_address = adr;
-
-        frame.sets[0] = frame.descriptors.allocate(
-            core.cpuallocator,
-            core.device.handle,
-            pipelines.vertexshader.scenedatalayout,
-            null,
-        );
-        // frame.sets[1] = frame.descriptors.allocate(
-        //     core.cpuallocator,
-        //     core.device.handle,
-        //     pipelines.meshshader.scenedatalayout,
-        //     null,
-        // );
         {
             var writer = Writer.init();
             defer writer.deinit(core.cpuallocator);
             writer.writeBuffer(
                 core.cpuallocator,
                 0,
-                frame.buffers.scenedata.buffer,
-                @sizeOf(buffer.SceneDataUniform),
+                data.scenedata.buffer,
+                @sizeOf(SceneDataUniform),
                 0,
                 c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             );
-            writer.updateSet(core.device.handle, frame.sets[0]);
-            // writer.updateSet(core.device.handle, frame.sets[1]);
+            writer.updateSet(core.device.handle, pipeline.dynamic_sets[i]);
         }
     }
     // const ico = gltf.load_meshes(core.cpuallocator, "assets/icosphere.glb") catch @panic("Failed to load mesh");
@@ -227,7 +210,7 @@ pub fn initScene(core: *Core) void {
     // }
 }
 
-pub fn loop(engine: *Core, window: *Window) void {
+pub fn loop(self: *Self, engine: *Core, window: *Window) void {
     var timer = std.time.Timer.start() catch @panic("Failed to start timer");
     var delta: u64 = undefined;
 
@@ -239,7 +222,7 @@ pub fn loop(engine: *Core, window: *Window) void {
 
     Window.check_sdl_bool(c.SDL_SetWindowRelativeMouseMode(window.sdl_window, true));
     window.state.capture_mouse = true;
-    initScene(engine);
+    self.initScene(engine);
 
     while (!window.state.quit) {
         window.processInput();
@@ -265,9 +248,8 @@ pub fn loop(engine: *Core, window: *Window) void {
         }
         var frame = &engine.framecontexts.frames[engine.framecontexts.current];
         frame.submitBegin(engine) catch continue;
-        uploadSceneData(engine, frame, camerarot.view(camerapos));
+        self.uploadSceneData(engine, camerarot.view(camerapos));
         // engine.pipelines.vertexshader.draw(engine, frame);
-        // engine.pipelines.meshshader.draw(engine, frame);
         frame.submitEnd(engine);
     }
 }

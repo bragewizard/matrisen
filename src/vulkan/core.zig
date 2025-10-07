@@ -13,9 +13,8 @@ const geometry = @import("linalg");
 const descritpormanager = @import("descriptormanager.zig");
 const Mat4x4 = geometry.Mat4x4(f32);
 const ResourceEntry = buffer.ResourceEntry;
-const Writer = descritpormanager.Writer;
 const Allocator = descritpormanager.Allocator;
-const FrameContexts = commands.FrameContexts;
+const FrameContexts = commands.FrameContexts(multibuffering);
 const AsyncContext = commands.AsyncContext;
 const Window = @import("../window.zig");
 const Instance = @import("instance.zig");
@@ -25,6 +24,7 @@ const Swapchain = @import("swapchain.zig");
 const Images = @import("images.zig");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
+pub const multibuffering = 2;
 const Self = @This();
 
 resizerequest: bool = false,
@@ -40,9 +40,7 @@ framecontexts: FrameContexts = .{},
 asynccontext: AsyncContext = .{},
 images: Images = .{},
 pipelines: Pipelines = .{},
-descriptorallocator: Allocator = .{},
-sets: [2]c.VkDescriptorSet = undefined,
-buffers: buffer.GlobalBuffers = .{},
+globalallocator: Allocator = .{},
 
 pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     var self: Self = .{};
@@ -90,7 +88,6 @@ pub fn deinit(self: *Self) void {
 }
 
 const Pipelines = struct {
-    // meshshader: @import("pipelines/meshshader.zig") = .{},
     vertexshader: @import("pipelines/vertexshader.zig") = .{},
 
     pub fn init(core: *Self) void {

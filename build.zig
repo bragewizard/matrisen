@@ -103,9 +103,12 @@ pub fn build(b: *Build) !void {
 
 fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
     const shaders_dir = if (@hasDecl(@TypeOf(b.build_root.handle), "openIterableDir"))
-        b.build_root.handle.openIterableDir("src/shaders", .{}) catch @panic("Failed to open shaders directory")
+        b.build_root.handle.openIterableDir("src/vulkan/pipelines/shaders", .{}) catch @panic("Failed to open shaders directory")
     else
-        b.build_root.handle.openDir("src/shaders", .{ .iterate = true }) catch @panic("Failed to open shaders directory");
+        b.build_root.handle.openDir(
+            "src/vulkan/pipelines/shaders",
+            .{ .iterate = true },
+        ) catch @panic("Failed to open shaders directory");
 
     var file_it = shaders_dir.iterate();
     while (file_it.next() catch @panic("failed to iterate shader directory")) |entry| {
@@ -126,8 +129,8 @@ fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
 }
 
 fn add_shader(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) void {
-    const source = std.fmt.allocPrint(b.allocator, "src/shaders/{s}", .{name}) catch @panic("OOM");
-    const outpath = std.fmt.allocPrint(b.allocator, "src/shaders/{s}.spv", .{name}) catch @panic("OOM");
+    const source = std.fmt.allocPrint(b.allocator, "src/vulkan/pipelines/shaders/{s}", .{name}) catch @panic("OOM");
+    const outpath = std.fmt.allocPrint(b.allocator, "src/vulkan/pipelines/shaders/{s}.spv", .{name}) catch @panic("OOM");
     const shader_compilation = b.addSystemCommand(&.{"glslangValidator"});
     shader_compilation.addArg("--target-env");
     shader_compilation.addArg("vulkan1.3");
