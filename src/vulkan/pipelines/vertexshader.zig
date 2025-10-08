@@ -188,3 +188,17 @@ pub fn writeSetSBBO(self: *Self, core: *Core, data: buffers.AllocatedBuffer, T: 
     );
     writer.updateSet(core.device.handle, self.static_set);
 }
+
+// pub fn writeSetUniform(self: *Self, core: *Core, data: buffers.AllocatedBuffer, T: type) void {
+//     var writer = Writer.init();
+//     defer writer.deinit(core.cpuallocator);
+//     writer.writeBuffer(
+//         core.cpuallocator,
+//         0,
+//         data.scenedata.buffer,
+//         @sizeOf(SceneDataUniform),
+//         0,
+//         c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//     );
+//     writer.updateSet(core.device.handle, pipeline.dynamic_sets[i]);
+// }

@@ -40,7 +40,6 @@ framecontexts: FrameContexts = .{},
 asynccontext: AsyncContext = .{},
 images: Images = .{},
 pipelines: Pipelines = .{},
-globalallocator: Allocator = .{},
 
 pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     var self: Self = .{};

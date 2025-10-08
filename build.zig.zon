@@ -3,9 +3,7 @@
     .name = .matrisen,
     .version = "0.0.1",
     .minimum_zig_version = "0.14.0-dev.3460+6d29ef0ba",
-    .dependencies = .{
-        .truetype = .{ .path = "../TrueType" },
-    },
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",

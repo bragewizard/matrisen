@@ -53,52 +53,12 @@ pub fn build(b: *Build) !void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const linalg = b.createModule(.{
+    const matrisen = b.createModule(.{
         .target = target,
         .optimize = optimize,
-        .root_source_file = b.path("src/linalg.zig"),
+        .root_source_file = b.path("src/root.zig"),
     });
-    exe.root_module.addImport("linalg", linalg);
-
-    // const pipelines = b.createModule(.{
-    //     .target = target,
-    //     .optimize = optimize,
-    //     .root_source_file = b.path("src/vulkan/pipelines.zig"),
-    // });
-    // exe.root_module.addImport("pipelines", pipelines);
-
-    const clibs = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .root_source_file = b.path("src/clibs.zig"),
-    });
-    exe.root_module.addImport("clibs", clibs);
-
-    // const bench = b.createModule(.{
-    // .target = target,
-    // .optimize = optimize,
-    // .root_source_file = b.path("benchmarking.zig"),
-    // });
-
-    const test_step = b.step("test", "Run unit tests");
-    const unittest = b.addTest(.{ .root_module = linalg });
-    const run_test = b.addRunArtifact(unittest);
-    test_step.dependOn(&run_test.step);
-
-    // const bench_geometry = b.addExecutable(.{
-    // .name = "bench-geometry",
-    // .root_source_file = b.path("src/geometry.zig"),
-    // .target = target,
-    // .optimize = optimize,
-    // });
-    // const install_bench = b.addInstallArtifact(bench_geometry, .{});
-    // const run_bench = b.addRunArtifact(bench_geometry);
-    // const bench_step = b.step("bench", "Run the bench");
-    // bench_step.dependOn(&run_bench.step);
-    // bench_step.dependOn(&install_bench.step);
-
-    // bench_geometry.root_module.addImport("benchmarking", bench);
-    // bench_geometry.root_module.addImport("geometry", geometry);
+    exe.root_module.addImport("matrisen", matrisen);
 }
 
 fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
