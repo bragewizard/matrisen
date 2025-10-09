@@ -1,32 +1,13 @@
-const c = @import("clibs").libs;
+const c = @import("../clibs.zig").libs;
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
-const buffer = @import("buffers.zig");
-const commands = @import("commands.zig");
+const buffer = @import("buffer.zig");
+const command = @import("command.zig");
 const std = @import("std");
 const log = std.log.scoped(.images);
-const AsyncContext = @import("commands.zig").AsyncContext;
-const Vec4 = @import("linalg").Vec4(f32);
+const AsyncContext = command.AsyncContext;
+const Vec4 = @import("../linalg.zig").Vec4(f32);
 const Core = @import("core.zig");
-
-textures: [6]AllocatedImage(1) = undefined,
-depths: [1]AllocatedImage(1) = undefined,
-extent3d: [1]c.VkExtent3D = undefined,
-extent2d: [1]c.VkExtent2D = undefined,
-samplers: [2]c.VkSampler = undefined,
-
-renderattachmentformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT,
-depth_format: c.VkFormat = c.VK_FORMAT_D32_SFLOAT,
-colorattachment: AllocatedImage(1) = undefined,
-resolvedattachment: AllocatedImage(1) = undefined,
-depthstencilattachment: AllocatedImage(1) = undefined,
-
-swapchain_format: c.VkFormat = undefined,
-swapchain_extent: c.VkExtent2D = .{},
-swapchain: []c.VkImage = &.{},
-swapchain_views: []c.VkImageView = &.{},
-
-const Self = @This();
 
 pub fn AllocatedImage(N: comptime_int) type {
     return struct {
@@ -37,18 +18,17 @@ pub fn AllocatedImage(N: comptime_int) type {
 }
 
 pub fn createRenderAttachments(core: *Core) void {
-    var self = &core.images;
     const extent: c.VkExtent3D = .{
-        .width = self.swapchain_extent.width,
-        .height = self.swapchain_extent.height,
+        .width = core.swapchain_extent.width,
+        .height = core.swapchain_extent.height,
         .depth = 1,
     };
-    self.extent3d[0] = extent;
+    core.extent3d[0] = extent;
 
     const draw_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = self.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -67,15 +47,15 @@ pub fn createRenderAttachments(core: *Core) void {
         core.gpuallocator,
         &draw_image_ci,
         &draw_image_ai,
-        &self.colorattachment.image,
-        &self.colorattachment.allocation,
+        &core.colorattachment.image,
+        &core.colorattachment.allocation,
         null,
     ));
     const draw_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.colorattachment.image,
+        .image = core.colorattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = self.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -89,12 +69,12 @@ pub fn createRenderAttachments(core: *Core) void {
         core.device.handle,
         &draw_image_view_ci,
         Core.vkallocationcallbacks,
-        &self.colorattachment.views[0],
+        &core.colorattachment.views[0],
     ));
     const resolved_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = self.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -114,15 +94,15 @@ pub fn createRenderAttachments(core: *Core) void {
         core.gpuallocator,
         &resolved_image_ci,
         &resolved_image_ai,
-        &self.resolvedattachment.image,
-        &self.resolvedattachment.allocation,
+        &core.resolvedattachment.image,
+        &core.resolvedattachment.allocation,
         null,
     ));
     const resolved_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.resolvedattachment.image,
+        .image = core.resolvedattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = self.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -136,14 +116,14 @@ pub fn createRenderAttachments(core: *Core) void {
         core.device.handle,
         &resolved_view_ci,
         Core.vkallocationcallbacks,
-        &self.resolvedattachment.views[0],
+        &core.resolvedattachment.views[0],
     ));
 
     const depth_extent = extent;
     const depth_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = self.depth_format,
+        .format = core.depth_format,
         .extent = depth_extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -157,16 +137,16 @@ pub fn createRenderAttachments(core: *Core) void {
         core.gpuallocator,
         &depth_image_ci,
         &draw_image_ai,
-        &self.depthstencilattachment.image,
-        &self.depthstencilattachment.allocation,
+        &core.depthstencilattachment.image,
+        &core.depthstencilattachment.allocation,
         null,
     ));
 
     const depth_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.depthstencilattachment.image,
+        .image = core.depthstencilattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = self.depth_format,
+        .format = core.depth_format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_DEPTH_BIT,
             .baseMipLevel = 0,
@@ -179,12 +159,11 @@ pub fn createRenderAttachments(core: *Core) void {
         core.device.handle,
         &depth_image_view_ci,
         Core.vkallocationcallbacks,
-        &self.depthstencilattachment.views[0],
+        &core.depthstencilattachment.views[0],
     ));
 }
 
 pub fn createDefaultTextures(core: *Core) void {
-    var self = &core.images;
     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
     var white: u32 = Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
     var grey: u32 = Vec4.packU8(.{ .x = 0.2, .y = 0.2, .z = 0.2, .w = 1 });
@@ -192,7 +171,7 @@ pub fn createDefaultTextures(core: *Core) void {
     const grey2 = Vec4.packU8(.{ .x = 0.08, .y = 0.08, .z = 0.08, .w = 1 });
     var black: u32 = Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 1 });
 
-    self.textures[0] = create_upload(
+    core.textures[0] = create_upload(
         core,
         &white,
         size,
@@ -200,7 +179,7 @@ pub fn createDefaultTextures(core: *Core) void {
         c.VK_IMAGE_USAGE_SAMPLED_BIT,
         false,
     );
-    self.textures[1] = create_upload(
+    core.textures[1] = create_upload(
         core,
         &grey,
         size,
@@ -208,7 +187,7 @@ pub fn createDefaultTextures(core: *Core) void {
         c.VK_IMAGE_USAGE_SAMPLED_BIT,
         false,
     );
-    self.textures[2] = create_upload(
+    core.textures[2] = create_upload(
         core,
         &black,
         size,
@@ -216,9 +195,9 @@ pub fn createDefaultTextures(core: *Core) void {
         c.VK_IMAGE_USAGE_SAMPLED_BIT,
         false,
     );
-    self.textures[1].views[0] = create_view(
+    core.textures[1].views[0] = create_view(
         core.device.handle,
-        self.textures[1].image,
+        core.textures[1].image,
         c.VK_FORMAT_R8G8B8A8_UNORM,
         1,
     );
@@ -230,7 +209,7 @@ pub fn createDefaultTextures(core: *Core) void {
             checker[y * 16 + x] = if (tile == 1) grey1 else grey2;
         }
     }
-    self.textures[3] = create_upload(
+    core.textures[3] = create_upload(
         core,
         &checker,
         .{ .width = 16, .height = 16, .depth = 1 },
@@ -245,35 +224,34 @@ pub fn createDefaultTextures(core: *Core) void {
         .minFilter = c.VK_FILTER_NEAREST,
     };
 
-    check_vk_panic(c.vkCreateSampler(core.device.handle, &sampl, null, &self.samplers[0]));
+    check_vk_panic(c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[0]));
     sampl.magFilter = c.VK_FILTER_LINEAR;
     sampl.minFilter = c.VK_FILTER_LINEAR;
-    check_vk_panic(c.vkCreateSampler(core.device.handle, &sampl, null, &self.samplers[1]));
+    check_vk_panic(c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[1]));
 }
 
 pub fn deinit(core: *Core) void {
-    const self = &core.images;
-    c.vmaDestroyImage(core.gpuallocator, self.colorattachment.image, self.colorattachment.allocation);
-    c.vkDestroyImageView(core.device.handle, self.colorattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, self.resolvedattachment.image, self.resolvedattachment.allocation);
-    c.vkDestroyImageView(core.device.handle, self.resolvedattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, self.depthstencilattachment.image, self.depthstencilattachment.allocation);
-    c.vkDestroyImageView(core.device.handle, self.depthstencilattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, self.textures[0].image, self.textures[0].allocation);
-    // c.vkDestroyImageView(core.device.handle, self.textures[0].views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, self.textures[1].image, self.textures[1].allocation);
-    c.vkDestroyImageView(core.device.handle, self.textures[1].views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, self.textures[2].image, self.textures[2].allocation);
-    // c.vkDestroyImageView(core.device.handle, self.textures[2].views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, self.textures[3].image, self.textures[3].allocation);
-    // c.vkDestroyImageView(core.device.handle, self.textures[3].views[0], null);
-    c.vkDestroySampler(core.device.handle, self.samplers[0], null);
-    c.vkDestroySampler(core.device.handle, self.samplers[1], null);
-    for (self.swapchain_views) |view| {
+    c.vmaDestroyImage(core.gpuallocator, core.colorattachment.image, core.colorattachment.allocation);
+    c.vkDestroyImageView(core.device.handle, core.colorattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.resolvedattachment.image, core.resolvedattachment.allocation);
+    c.vkDestroyImageView(core.device.handle, core.resolvedattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.depthstencilattachment.image, core.depthstencilattachment.allocation);
+    c.vkDestroyImageView(core.device.handle, core.depthstencilattachment.views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.textures[0].image, core.textures[0].allocation);
+    // c.vkDestroyImageView(core.device.handle, core.textures[0].views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.textures[1].image, core.textures[1].allocation);
+    c.vkDestroyImageView(core.device.handle, core.textures[1].views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.textures[2].image, core.textures[2].allocation);
+    // c.vkDestroyImageView(core.device.handle, core.textures[2].views[0], null);
+    c.vmaDestroyImage(core.gpuallocator, core.textures[3].image, core.textures[3].allocation);
+    // c.vkDestroyImageView(core.device.handle, core.textures[3].views[0], null);
+    c.vkDestroySampler(core.device.handle, core.samplers[0], null);
+    c.vkDestroySampler(core.device.handle, core.samplers[1], null);
+    for (core.swapchain_views) |view| {
         c.vkDestroyImageView(core.device.handle, view, null);
     }
-    core.cpuallocator.free(self.swapchain);
-    core.cpuallocator.free(self.swapchain_views);
+    core.cpuallocator.free(core.swapchain);
+    core.cpuallocator.free(core.swapchain_views);
 }
 
 pub fn create(
@@ -379,7 +357,7 @@ pub fn create_upload(
     );
     AsyncContext.submitBegin(core);
     const cmd = core.asynccontext.command_buffer;
-    commands.transition_image(
+    command.transition_image(
         cmd,
         new_image.image,
         c.VK_IMAGE_LAYOUT_UNDEFINED,
@@ -405,7 +383,7 @@ pub fn create_upload(
         1,
         &image_copy_region,
     );
-    commands.transition_image(
+    command.transition_image(
         cmd,
         new_image.image,
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

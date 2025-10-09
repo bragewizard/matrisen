@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("clibs").libs;
+const c = @import("../clibs.zig").libs;
 const debug = @import("debug.zig");
 const check_vk = debug.check_vk;
 const Core = @import("core.zig");

@@ -1,4 +1,4 @@
-const c = @import("clibs").libs;
+const c = @import("../clibs.zig").libs;
 const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;

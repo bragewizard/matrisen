@@ -9,16 +9,14 @@
 //!
 
 const std = @import("std");
-const c = @import("clibs").libs;
-const geometry = @import("linalg");
-const commands = @import("commands.zig");
+const c = @import("../clibs.zig").libs;
+const linalg = @import("../linalg.zig");
 const debug = @import("debug.zig");
-const Vec3 = geometry.Vec3(f32);
-const Vec4 = geometry.Vec4(f32);
 const Core = @import("core.zig");
-const AsyncContext = @import("commands.zig").AsyncContext;
-const FrameContext = @import("commands.zig").FrameContext;
-const Mat4x4 = geometry.Mat4x4(f32);
+const AsyncContext = @import("command.zig").AsyncContext;
+const Vec3 = linalg.Vec3(f32);
+const Vec4 = linalg.Vec4(f32);
+const Mat4x4 = linalg.Mat4x4(f32);
 
 const Self = @This();
 

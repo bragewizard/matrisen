@@ -1,8 +1,8 @@
-const c = @import("clibs").libs;
+const c = @import("../clibs.zig").libs;
 const std = @import("std");
 const debug = @import("debug.zig");
 const Core = @import("core.zig");
-const Images = @import("images.zig");
+const image = @import("image.zig");
 const alloc_cb = @import("core.zig").vkallocationcallbacks;
 const log = std.log.scoped(.swapchain);
 
@@ -161,8 +161,8 @@ pub fn init(core: *Core) void {
     };
     errdefer a.free(swapchain_image_views);
 
-    for (swapchain_images, swapchain_image_views) |image, *view| {
-        view.* = create_swapchain_image_views(core.device.handle, image, format.format);
+    for (swapchain_images, swapchain_image_views) |img, *view| {
+        view.* = create_swapchain_image_views(core.device.handle, img, format.format);
     }
 
     images.swapchain_extent = extent;
@@ -210,10 +210,10 @@ fn make_extent(capabilities: c.VkSurfaceCapabilitiesKHR, opts: CreateOpts) c.VkE
     return extent;
 }
 
-fn create_swapchain_image_views(device: c.VkDevice, image: c.VkImage, format: c.VkFormat) c.VkImageView {
+fn create_swapchain_image_views(device: c.VkDevice, img: c.VkImage, format: c.VkFormat) c.VkImageView {
     const view_info = std.mem.zeroInit(c.VkImageViewCreateInfo, .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = image,
+        .image = img,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
         .format = format,
         .components = .{
@@ -265,6 +265,6 @@ pub fn resize(core: *Core) void {
     }
     core.swapchain = .{};
     init(core);
-    Images.createRenderAttachments(core);
+    image.createRenderAttachments(core);
     core.resizerequest = false;
 }

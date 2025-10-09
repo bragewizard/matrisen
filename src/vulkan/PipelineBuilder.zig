@@ -1,13 +1,12 @@
 const std = @import("std");
-const c = @import("clibs").libs;
+const c = @import("../clibs.zig").libs;
 const debug = @import("debug.zig");
 const check_vk = debug.check_vk;
 const check_vk_panic = debug.check_vk_panic;
-const buffers = @import("buffers.zig");
-const geometry = @import("linalg");
-const images = @import("images.zig");
+const buffer = @import("buffer.zig");
+const linalg = @import("../linalg.zig");
+const image = @import("image.zig");
 const Core = @import("core.zig");
-const FrameContext = @import("commands.zig").FrameContexts.Context;
 
 const Self = @This();
 

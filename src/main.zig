@@ -1,26 +1,21 @@
 const std = @import("std");
-const vulkanbackend = @import("vulkan/core.zig");
-const Window = @import("window.zig");
 const m = @import("matrisen");
-const Core = @import("vulkan/core.zig");
-const Swapchain = @import("vulkan/swapchain.zig");
-const FrameContext = commands.FrameContext;
-const buffer = @import("vulkan/buffers.zig");
-const AllocatedBuffer = buffer.AllocatedBuffer;
-const Vertex = buffer.Vertex;
-const gltf = @import("gltf.zig");
-const commands = @import("vulkan/commands.zig");
-const create = @import("vulkan/buffers.zig").create;
-const SceneDataUniform = @import("vulkan/pipelines/vertexshader.zig").SceneDataUniform;
-const Allocator = @import("vulkan/descriptormanager.zig").Allocator;
-const Writer = @import("vulkan/descriptormanager.zig").Writer;
 const log = std.log.scoped(.app);
-const geometry = @import("linalg");
-const Quat = geometry.Quat(f32);
-const Vec3 = geometry.Vec3(f32);
-const Vec4 = geometry.Vec4(f32);
-const Mat4x4 = geometry.Mat4x4(f32);
-const multibuffering = Core.multibuffering;
+const c = m.clibs;
+const buffer = m.buffer;
+const SceneDataUniform = m.DefaultPipeline.SceneDataUniform;
+const Core = m.Core;
+const FrameContext = m.command.FrameContext;
+const AllocatedBuffer = m.buffer.AllocatedBuffer;
+const Vertex = m.buffer.Vertex;
+const Allocator = m.descriptor.Allocator;
+const Writer = m.descriptor.Writer;
+const Quat = m.linalg.Quat(f32);
+const Vec3 = m.linalg.Vec3(f32);
+const Vec4 = m.linalg.Vec4(f32);
+const Mat4x4 = m.linalg.Mat4x4(f32);
+
+const multibuffering = m.Core.multibuffering;
 
 const App = @This();
 
@@ -37,7 +32,7 @@ const StaticData = struct {
     resourcetable: AllocatedBuffer = undefined,
 };
 
-data: [multibuffering]DynamicData = .{},
+data: [multibuffering]DynamicData = @splat(.{}),
 sdata: StaticData = .{},
 
 // pub fn destroyBuffers(self: *FrameContext, core: *Core) void {
@@ -45,32 +40,32 @@ sdata: StaticData = .{},
 //     c.vmaDestroyBuffer(core.gpuallocator, self.buffers.poses.buffer, self.buffers.poses.allocation);
 // }
 
-pub fn uploadSceneData(self: *App, core: *Core, view: Mat4x4) void {
-    const current = core.framecontexts.current;
-    var frame = &core.framecontexts.frames[current];
-    var scene_uniform_data: *SceneDataUniform = @ptrCast(@alignCast(self.data[current].scenedata.info.pMappedData.?));
-    scene_uniform_data.view = view;
-    scene_uniform_data.proj = Mat4x4.perspective(
-        std.math.degreesToRadians(60.0),
-        @as(f32, @floatFromInt(frame.draw_extent.width)) / @as(f32, @floatFromInt(frame.draw_extent.height)),
-        0.1,
-        1000.0,
-    );
-    scene_uniform_data.viewproj = Mat4x4.mul(scene_uniform_data.proj, scene_uniform_data.view);
-    scene_uniform_data.sunlight_dir = .{ .x = 0.1, .y = 0.1, .z = 1, .w = 1 };
-    scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
-    scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
+// pub fn uploadSceneData(self: *App, core: *Core, view: Mat4x4) void {
+//     const current = core.framecontexts.current;
+//     var frame = &core.framecontexts.frames[current];
+//     var scene_uniform_data: *SceneDataUniform = @ptrCast(@alignCast(self.data[current].scenedata.info.pMappedData.?));
+//     scene_uniform_data.view = view;
+//     scene_uniform_data.proj = Mat4x4.perspective(
+//         std.math.degreesToRadians(60.0),
+//         @as(f32, @floatFromInt(frame.draw_extent.width)) / @as(f32, @floatFromInt(frame.draw_extent.height)),
+//         0.1,
+//         1000.0,
+//     );
+//     scene_uniform_data.viewproj = Mat4x4.mul(scene_uniform_data.proj, scene_uniform_data.view);
+//     scene_uniform_data.sunlight_dir = .{ .x = 0.1, .y = 0.1, .z = 1, .w = 1 };
+//     scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
+//     scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
-    var poses: *[2]Mat4x4 = @ptrCast(@alignCast(self.data[current].poses.info.pMappedData.?));
+//     var poses: *[2]Mat4x4 = @ptrCast(@alignCast(self.data[current].poses.info.pMappedData.?));
 
-    var time: f32 = @floatFromInt(core.framenumber);
-    time /= 100;
-    var mod = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
-    mod = mod.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    mod = mod.translate(.{ .x = 2.0, .y = 2.0, .z = 2.0 });
-    poses[0] = Mat4x4.identity;
-    poses[1] = mod;
-}
+//     var time: f32 = @floatFromInt(core.framenumber);
+//     time /= 100;
+//     var mod = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+//     mod = mod.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
+//     mod = mod.translate(.{ .x = 2.0, .y = 2.0, .z = 2.0 });
+//     poses[0] = Mat4x4.identity;
+//     poses[1] = mod;
+// }
 
 // FIX this is temporary, need to move code where it is appropriate
 pub fn initScene(self: *App, core: *Core) void {
@@ -78,24 +73,48 @@ pub fn initScene(self: *App, core: *Core) void {
         .{ .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .ratio = 1 },
         .{ .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .ratio = 1 },
     };
-    core.descriptorallocator.init(core.device.handle, 10, &sizes, core.cpuallocator);
-    core.buffers.indirect = buffer.createIndirect(core, 1);
+    core.globaldescriptorallocator.init(core.device.handle, 10, &sizes, core.cpuallocator);
+
+    var ratios = [_]Allocator.PoolSizeRatio{
+        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
+        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
+        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
+        .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
+    };
+
+    core.pipelinestatic_set = core.globaldescriptorallocator.allocate(
+        core.cpuallocator,
+        core.device.handle,
+        self.resourcelayout,
+        null,
+    );
+
+    for (0.., &self.dynamicdescriptorallocators) |i, *element| {
+        element.init(core.device.handle, 1000, &ratios, core.cpuallocator);
+        self.dynamic_sets[i] = element.allocate(
+            core.cpuallocator,
+            core.device.handle,
+            self.scenedatalayout,
+            null,
+        );
+    }
+    core.buffers.indirect = m.buffer.createIndirect(core, 1);
 
     // FIX this is hardcoded two objects for the time beeing
-    const resourses1: buffer.ResourceEntry = .{ .pose = 0, .object = 0, .vertex_offset = 0 };
-    const resourses2: buffer.ResourceEntry = .{ .pose = 1, .object = 1, .vertex_offset = 199 };
-    const resources: [2]buffer.ResourceEntry = .{ resourses1, resourses2 };
+    const resourses1: m.buffer.ResourceEntry = .{ .pose = 0, .object = 0, .vertex_offset = 0 };
+    const resourses2: m.buffer.ResourceEntry = .{ .pose = 1, .object = 1, .vertex_offset = 199 };
+    const resources: [2]m.buffer.ResourceEntry = .{ resourses1, resourses2 };
     const resources_slice = std.mem.sliceAsBytes(&resources);
 
-    self.sdata.resourcetable = buffer.createSSBO(core, resources_slice.len, true);
-    buffer.upload(core, resources_slice, core.buffers.resourcetable);
+    self.sdata.resourcetable = m.buffer.createSSBO(core, resources_slice.len, true);
+    m.buffer.upload(core, resources_slice, core.buffers.resourcetable);
 
     for (&self.data) |*data| {
         data.scenedata = buffer.create(
             core,
             @sizeOf(SceneDataUniform),
-            c.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+            m.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            m.VMA_MEMORY_USAGE_CPU_TO_GPU,
         );
 
         data.poses = buffer.create(
@@ -211,58 +230,59 @@ pub fn initScene(self: *App, core: *Core) void {
     // }
 }
 
-pub fn loop(self: *App, engine: *Core, window: *Window) void {
-    var timer = std.time.Timer.start() catch @panic("Failed to start timer");
-    var delta: u64 = undefined;
+pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
+    // var timer = std.time.Timer.start() catch @panic("Failed to start timer");
+    // var delta: u64 = undefined;
+    _ = engine;
+    // var camerarot: Quat = .identity;
+    // var camerapos: Vec3 = .{ .x = 0, .y = -5, .z = 8 };
+    // camerarot.rotatePitch(std.math.degreesToRadians(60));
+    // camerarot.rotateYaw(std.math.degreesToRadians(180));
+    // camerarot.rotateRoll(std.math.degreesToRadians(180));
 
-    var camerarot: Quat = .identity;
-    var camerapos: Vec3 = .{ .x = 0, .y = -5, .z = 8 };
-    camerarot.rotatePitch(std.math.degreesToRadians(60));
-    camerarot.rotateYaw(std.math.degreesToRadians(180));
-    camerarot.rotateRoll(std.math.degreesToRadians(180));
-
-    Window.check_sdl_bool(c.SDL_SetWindowRelativeMouseMode(window.sdl_window, true));
+    m.Window.check_sdl_bool(m.SDL_SetWindowRelativeMouseMode(window.sdl_window, true));
     window.state.capture_mouse = true;
-    self.initScene(engine);
+    _ = self;
+    // self.initScene(engine);
 
     while (!window.state.quit) {
         window.processInput();
-        if (window.state.w) camerapos.translateForward(&camerarot, 0.1);
-        if (window.state.s) camerapos.translateForward(&camerarot, -0.1);
-        if (window.state.a) camerapos.translatePitch(&camerarot, -0.1);
-        if (window.state.d) camerapos.translatePitch(&camerarot, 0.1);
-        if (window.state.q) camerapos.translateWorldZ(-0.1);
-        if (window.state.e) camerapos.translateWorldZ(0.1);
-        camerarot.rotatePitch(-window.state.mouse_y / 150);
-        camerarot.rotateWorldZ(-window.state.mouse_x / 150);
-        if (engine.framenumber % 100 == 0) {
-            delta = timer.read();
-            log.info("FPS: {d}                        \x1b[1A", .{
-                @as(u32, (@intFromFloat(100_000_000_000.0 / @as(f32, @floatFromInt(delta))))),
-            });
-            timer.reset();
-        }
-        if (engine.resizerequest) {
-            window.get_size(&engine.images.swapchain_extent.width, &engine.images.swapchain_extent.height);
-            Swapchain.resize(engine);
-            continue;
-        }
-        var frame = &engine.framecontexts.frames[engine.framecontexts.current];
-        frame.submitBegin(engine) catch continue;
-        self.uploadSceneData(engine, camerarot.view(camerapos));
-        // engine.pipelines.vertexshader.draw(engine, frame);
-        frame.submitEnd(engine);
+        // if (window.state.w) camerapos.translateForward(&camerarot, 0.1);
+        // if (window.state.s) camerapos.translateForward(&camerarot, -0.1);
+        // if (window.state.a) camerapos.translatePitch(&camerarot, -0.1);
+        // if (window.state.d) camerapos.translatePitch(&camerarot, 0.1);
+        // if (window.state.q) camerapos.translateWorldZ(-0.1);
+        // if (window.state.e) camerapos.translateWorldZ(0.1);
+        // camerarot.rotatePitch(-window.state.mouse_y / 150);
+        // camerarot.rotateWorldZ(-window.state.mouse_x / 150);
+        // if (engine.framenumber % 100 == 0) {
+        //     delta = timer.read();
+        //     log.info("FPS: {d}                        \x1b[1A", .{
+        //         @as(u32, (@intFromFloat(100_000_000_000.0 / @as(f32, @floatFromInt(delta))))),
+        //     });
+        //     timer.reset();
+        // }
+        // if (engine.resizerequest) {
+        //     window.get_size(&engine.images.swapchain_extent.width, &engine.images.swapchain_extent.height);
+        //     m.Swapchain.resize(engine);
+        //     continue;
+        // }
+        // var frame = &engine.framecontexts.frames[engine.framecontexts.current];
+        // frame.submitBegin(engine) catch continue;
+        // // self.uploadSceneData(engine, camerarot.view(camerapos));
+        // // engine.pipelines.vertexshader.draw(engine, frame);
+        // frame.submitEnd(engine);
     }
 }
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
     const allocator = debug_allocator.allocator();
-    var window: Window = .init(2000, 1200);
+    var window: m.Window = .init(2000, 1200);
     defer window.deinit();
-    var engine: vulkanbackend = .init(allocator, &window);
+    var engine: Core = .init(allocator, &window);
     defer engine.deinit();
-    var app: App = .{};
-    defer app.deinit();
-    app.loop(&engine, &window);
+    // var app: App = .{};
+    // defer app.deinit();
+    // app.loop(&engine, &window);
 }

@@ -1,19 +1,16 @@
 const std = @import("std");
-const c = @import("clibs").libs;
+const c = @import("../../clibs.zig").libs;
 const check_vk_panic = @import("../debug.zig").check_vk_panic;
-const descriptorbuilder = @import("../descriptormanager.zig");
-const Allocator = descriptorbuilder.Allocator;
+const descriptor = @import("../descriptor.zig");
 const vk_alloc_cbs = Core.vkallocationcallbacks;
-const buffers = @import("../buffers.zig");
-const geometry = @import("linalg");
-const Vec3 = geometry.Vec3(f32);
-const Vec4 = geometry.Vec4(f32);
-const PipelineBuilder = @import("../pipelinemanager.zig");
-const FrameContext = @import("../commands.zig").FrameContext;
-const LayoutBuilder = descriptorbuilder.LayoutBuilder;
-const Writer = descriptorbuilder.Writer;
+const buffer = @import("../buffer.zig");
+const linalg = @import("../../linalg");
+const Vec3 = linalg.Vec3(f32);
+const Vec4 = linalg.Vec4(f32);
+const PipelineBuilder = @import("../pipeline.zig");
+const FrameContext = @import("../command.zig").FrameContext;
 const Core = @import("../core.zig");
-const Mat4x4 = geometry.Mat4x4(f32);
+const Mat4x4 = linalg.Mat4x4(f32);
 
 layout: c.VkPipelineLayout = undefined,
 pipeline: c.VkPipeline = undefined,
@@ -21,7 +18,6 @@ resourcelayout: c.VkDescriptorSetLayout = undefined,
 scenedatalayout: c.VkDescriptorSetLayout = undefined,
 static_set: c.VkDescriptorSet = undefined,
 dynamic_sets: [Core.multibuffering]c.VkDescriptorSet = undefined,
-descriptors: [Core.multibuffering]Allocator = .{.{}} ** Core.multibuffering,
 
 const Self = @This();
 
@@ -44,7 +40,7 @@ pub const MaterialConstantsUniform = extern struct {
 
 pub fn init(self: *Self, core: *Core) void {
     {
-        var builder: LayoutBuilder = .init();
+        var builder: descriptor.LayoutBuilder = .init();
         defer builder.deinit(core.cpuallocator);
         builder.add_binding(core.cpuallocator, 0, c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         self.scenedatalayout = builder.build(
@@ -55,7 +51,7 @@ pub fn init(self: *Self, core: *Core) void {
         );
     }
     {
-        var builder: LayoutBuilder = .init();
+        var builder: descriptor.LayoutBuilder = .init();
         defer builder.deinit(core.cpuallocator);
         builder.add_binding(core.cpuallocator, 0, c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
         self.resourcelayout = builder.build(
@@ -65,8 +61,8 @@ pub fn init(self: *Self, core: *Core) void {
             0,
         );
     }
-    const vertex_code align(4) = @embedFile("standard.vert.glsl").*;
-    const fragment_code align(4) = @embedFile("standard.frag.glsl").*;
+    const vertex_code align(4) = @embedFile("default.vert.glsl").*;
+    const fragment_code align(4) = @embedFile("default.frag.glsl").*;
 
     const vertex_module = PipelineBuilder.createShaderModule(
         core.device.handle,
@@ -123,8 +119,8 @@ pub fn init(self: *Self, core: *Core) void {
     pipelineBuilder.disable_blending();
     pipelineBuilder.enable_depthtest(true, c.VK_COMPARE_OP_LESS);
 
-    pipelineBuilder.set_color_attachment_format(core.images.renderattachmentformat);
-    pipelineBuilder.set_depth_format(core.images.depth_format);
+    pipelineBuilder.set_color_attachment_format(core.renderattachmentformat);
+    pipelineBuilder.set_depth_format(core.depth_format);
 
     pipelineBuilder.pipeline_layout = newlayout;
     self.pipeline = pipelineBuilder.buildPipeline(core.device.handle);
@@ -133,28 +129,6 @@ pub fn init(self: *Self, core: *Core) void {
     pipelineBuilder.enable_depthtest(false, c.VK_COMPARE_OP_LESS);
     // self.transparent = pipelineBuilder.build_pipeline(core.device.handle);
 
-    self.static_set = core.descriptorallocator.allocate(
-        core.cpuallocator,
-        core.device.handle,
-        self.resourcelayout,
-        null,
-    );
-
-    var ratios = [_]Allocator.PoolSizeRatio{
-        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_IMAGE },
-        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER },
-        .{ .ratio = 3, .type = c.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
-        .{ .ratio = 4, .type = c.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
-    };
-    for (0.., self.descriptors) |i, *descriptor| {
-        descriptor.init(core.device.handle, 1000, &ratios, core.cpuallocator);
-        self.dynamic_sets[i] = descriptor.allocate(
-            core.cpuallocator,
-            core.device.handle,
-            self.scenedatalayout,
-            null,
-        );
-    }
 }
 
 pub fn deinit(self: *Self, core: *Core) void {
@@ -175,8 +149,8 @@ pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {
     // c.vkCmdDraw(cmd, 24, 1, 0, 0);
 }
 
-pub fn writeSetSBBO(self: *Self, core: *Core, data: buffers.AllocatedBuffer, T: type) void {
-    var writer = Writer.init();
+pub fn writeSetSBBO(self: *Self, core: *Core, data: buffer.AllocatedBuffer, T: type) void {
+    var writer = descriptor.Writer.init();
     defer writer.deinit(core.cpuallocator);
     writer.writeBuffer(
         core.cpuallocator,

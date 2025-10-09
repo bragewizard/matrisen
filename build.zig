@@ -22,25 +22,33 @@ pub fn build(b: *Build) !void {
     };
     options.addOption([]const u8, "version", version_opt);
 
+    const matrisen = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/root.zig"),
+    });
+
     const exe = b.addExecutable(.{
+        .name = "matrisen",
         .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
             .optimize = optimize,
             .target = target,
-            .root_source_file = b.path("src/main.zig"),
+            .imports = &.{
+                .{ .name = "matrisen", .module = matrisen },
+            },
         }),
-        .name = "matrisen",
     });
 
     exe.root_module.addOptions("config", options);
     exe.linkLibCpp();
     exe.linkLibC();
-
     exe.linkSystemLibrary("SDL3");
     exe.linkSystemLibrary("vulkan");
-
     exe.addCSourceFile(.{ .file = b.path("src/vk_mem_alloc.cpp"), .flags = &.{""} });
     // TODO: replace with zigimg or my own
     exe.addCSourceFile(.{ .file = b.path("src/stb_image.c"), .flags = &.{""} });
+
     compile_all_shaders(b, exe);
     b.installArtifact(exe);
 
@@ -52,21 +60,14 @@ pub fn build(b: *Build) !void {
     }
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-
-    const matrisen = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-        .root_source_file = b.path("src/root.zig"),
-    });
-    exe.root_module.addImport("matrisen", matrisen);
 }
 
 fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
     const shaders_dir = if (@hasDecl(@TypeOf(b.build_root.handle), "openIterableDir"))
-        b.build_root.handle.openIterableDir("src/vulkan/pipelines/shaders", .{}) catch @panic("Failed to open shaders directory")
+        b.build_root.handle.openIterableDir("src/vulkan/pipelines", .{}) catch @panic("Failed to open shaders directory")
     else
         b.build_root.handle.openDir(
-            "src/vulkan/pipelines/shaders",
+            "src/vulkan/pipelines",
             .{ .iterate = true },
         ) catch @panic("Failed to open shaders directory");
 
@@ -89,8 +90,8 @@ fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
 }
 
 fn add_shader(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) void {
-    const source = std.fmt.allocPrint(b.allocator, "src/vulkan/pipelines/shaders/{s}", .{name}) catch @panic("OOM");
-    const outpath = std.fmt.allocPrint(b.allocator, "src/vulkan/pipelines/shaders/{s}.spv", .{name}) catch @panic("OOM");
+    const source = std.fmt.allocPrint(b.allocator, "src/vulkan/pipelines/{s}", .{name}) catch @panic("OOM");
+    const outpath = std.fmt.allocPrint(b.allocator, "src/vulkan/pipelines/{s}.spv", .{name}) catch @panic("OOM");
     const shader_compilation = b.addSystemCommand(&.{"glslangValidator"});
     shader_compilation.addArg("--target-env");
     shader_compilation.addArg("vulkan1.3");

@@ -1,17 +1,17 @@
 const std = @import("std");
 const log = std.log.scoped(.commands);
-const c = @import("clibs").libs;
-const buffers = @import("buffers.zig");
+const c = @import("../clibs.zig").libs;
+const buffer = @import("buffer.zig");
 const debug = @import("debug.zig");
-const descriptormanager = @import("descriptormanager.zig");
-const geometry = @import("linalg");
+const descriptor = @import("descriptor.zig");
+const geometry = @import("../linalg");
 const Mat4x4 = geometry.Mat4x4(f32);
-const Allocator = descriptormanager.Allocator;
-const Writer = descriptormanager.Writer;
+const Allocator = descriptor.Allocator;
+const Writer = descriptor.Writer;
 const Core = @import("core.zig");
 const Device = @import("device.zig").Device;
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
-const vk_alloc_cbs = @import("core.zig").vkallocationcallbacks;
+const vk_alloc_cbs = Core.vkallocationcallbacks;
 
 pub const FrameContext = struct {
     swapchain_semaphore: c.VkSemaphore = null,
@@ -21,6 +21,7 @@ pub const FrameContext = struct {
     command_buffer: c.VkCommandBuffer = null,
     swapchain_image_index: u32 = 0,
     draw_extent: c.VkExtent2D = undefined,
+    descriptorallocator: descriptor.Allocator = .{},
 
     pub fn submitBegin(frame: *FrameContext, core: *Core) !void {
         const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
@@ -256,8 +257,6 @@ pub fn FrameContexts(multibuffering: comptime_int) type {
                 c.vkDestroyFence(core.device.handle, frame.render_fence, vk_alloc_cbs);
                 c.vkDestroySemaphore(core.device.handle, frame.render_semaphore, vk_alloc_cbs);
                 c.vkDestroySemaphore(core.device.handle, frame.swapchain_semaphore, vk_alloc_cbs);
-                frame.descriptors.deinit(core.device.handle, core.cpuallocator);
-                frame.destroyBuffers(core);
             }
         }
 

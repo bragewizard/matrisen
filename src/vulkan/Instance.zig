@@ -1,4 +1,4 @@
-const c = @import("clibs").libs;
+const c = @import("../clibs.zig").libs;
 const std = @import("std");
 const Core = @import("core.zig");
 const check_vk = @import("debug.zig").check_vk;
