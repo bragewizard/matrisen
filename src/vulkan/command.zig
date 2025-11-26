@@ -1,15 +1,9 @@
 const std = @import("std");
 const log = std.log.scoped(.commands);
-const c = @import("../clibs.zig").libs;
-const buffer = @import("buffer.zig");
+const c = @import("../clibs/clibs.zig").libs;
 const debug = @import("debug.zig");
 const descriptor = @import("descriptor.zig");
-const geometry = @import("../linalg");
-const Mat4x4 = geometry.Mat4x4(f32);
-const Allocator = descriptor.Allocator;
-const Writer = descriptor.Writer;
-const Core = @import("core.zig");
-const Device = @import("device.zig").Device;
+const Core = @import("Core.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const vk_alloc_cbs = Core.vkallocationcallbacks;
 
@@ -22,6 +16,7 @@ pub const FrameContext = struct {
     swapchain_image_index: u32 = 0,
     draw_extent: c.VkExtent2D = undefined,
     descriptorallocator: descriptor.Allocator = .{},
+    dynamicset: c.VkDescriptorSet = undefined,
 
     pub fn submitBegin(frame: *FrameContext, core: *Core) !void {
         const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
@@ -41,7 +36,9 @@ pub const FrameContext = struct {
             return error.SwapchainOutOfDate;
         }
 
-        debug.check_vk(c.vkResetFences(core.device.handle, 1, &frame.render_fence)) catch @panic("Failed to reset render fence");
+        debug.check_vk(c.vkResetFences(core.device.handle, 1, &frame.render_fence)) catch {
+            @panic("Failed to reset render fence");
+        };
         debug.check_vk(c.vkResetCommandBuffer(frame.command_buffer, 0)) catch @panic("Failed to reset command buffer");
 
         const cmd = frame.command_buffer;

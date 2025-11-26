@@ -1,6 +1,6 @@
-const c = @import("clibs.zig").libs;
+const c = @import("clibs/clibs.zig").libs;
 const std = @import("std");
-const vkallocationcallbacks = @import("vulkan/core.zig").vkallocationcallbacks;
+const vkallocationcallbacks = @import("vulkan/Core.zig").vkallocationcallbacks;
 
 const Self = @This();
 

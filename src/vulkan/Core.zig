@@ -6,7 +6,7 @@
 
 const std = @import("std");
 const debug = @import("debug.zig");
-const c = @import("../clibs.zig").libs;
+const c = @import("../clibs/clibs.zig").libs;
 const commands = @import("command.zig");
 const buffer = @import("buffer.zig");
 const geometry = @import("linalg");
@@ -15,16 +15,17 @@ const image = @import("image.zig");
 const Mat4x4 = geometry.Mat4x4(f32);
 const ResourceEntry = buffer.ResourceEntry;
 const Allocator = descriptor.Allocator;
-const FrameContexts = commands.FrameContexts(multibuffering);
 const AsyncContext = commands.AsyncContext;
-const Window = @import("../window.zig");
-const Instance = @import("instance.zig");
+const Window = @import("../Window.zig");
+const Instance = @import("Instance.zig");
 const PhysicalDevice = @import("device.zig").PhysicalDevice;
 const Device = @import("device.zig").Device;
-const Swapchain = @import("swapchain.zig");
+const Swapchain = @import("Swapchain.zig");
+const ImageManager = @import("ImageManager.zig");
 
 pub const vkallocationcallbacks: ?*c.VkAllocationCallbacks = null;
 pub const multibuffering = 2;
+const FrameContexts = commands.FrameContexts(multibuffering);
 
 const Self = @This();
 
@@ -39,32 +40,17 @@ device: Device = .{},
 swapchain: Swapchain = .{},
 framecontexts: FrameContexts = .{},
 asynccontext: AsyncContext = .{},
-pipelines: Pipelines = .{},
-globaldescriptorallocator: descriptor.Allocator = .{},
-textures: [6]image.AllocatedImage(1) = undefined,
-depths: [1]image.AllocatedImage(1) = undefined,
-extent3d: [1]c.VkExtent3D = undefined,
-extent2d: [1]c.VkExtent2D = undefined,
-samplers: [2]c.VkSampler = undefined,
-renderattachmentformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT,
-depth_format: c.VkFormat = c.VK_FORMAT_D32_SFLOAT,
-colorattachment: image.AllocatedImage(1) = undefined,
-resolvedattachment: image.AllocatedImage(1) = undefined,
-depthstencilattachment: image.AllocatedImage(1) = undefined,
-swapchain_format: c.VkFormat = undefined,
-swapchain_extent: c.VkExtent2D = .{},
-swapchain_image: []c.VkImage = &.{},
-swapchain_views: []c.VkImageView = &.{},
+imagemanager: ImageManager = .{},
 
 pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     var self: Self = .{};
-    self.swapchain_extent = .{ .width = 0, .height = 0 };
+    self.imagemanager.swapchain_extent = .{ .width = 0, .height = 0 };
     self.cpuallocator = allocator;
     var initallocator = std.heap.ArenaAllocator.init(self.cpuallocator);
     const initallocatorinstance = initallocator.allocator();
     Instance.init(&self, initallocatorinstance);
     window.create_surface(self.instance.handle, &self.surface);
-    window.get_size(&self.swapchain_extent.width, &self.swapchain_extent.height);
+    window.get_size(&self.imagemanager.swapchain_extent.width, &self.imagemanager.swapchain_extent.height);
     PhysicalDevice.select(&self, initallocatorinstance);
     Device.init(&self, initallocatorinstance);
     Swapchain.init(&self);
@@ -78,8 +64,8 @@ pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     image.createRenderAttachments(&self);
     FrameContexts.init(&self);
     AsyncContext.init(&self);
-    image.createDefaultTextures(&self);
-    Pipelines.init(&self);
+    // image.createDefaultTextures(&self);
+    // initPipelineLayout(&self);
     initallocator.deinit();
     return self;
 }
@@ -97,21 +83,4 @@ pub fn deinit(self: *Self) void {
     defer Swapchain.deinit(self);
     defer FrameContexts.deinit(self);
     defer AsyncContext.deinit(self);
-    defer Pipelines.deinit(self);
 }
-
-const Pipelines = struct {
-    vertexshader: @import("pipelines/vertexshader.zig") = .{},
-
-    pub fn init(core: *Self) void {
-        inline for (std.meta.fields(Pipelines)) |field| {
-            @field(core.pipelines, field.name).init(core);
-        }
-    }
-
-    pub fn deinit(core: *Self) void {
-        inline for (std.meta.fields(Pipelines)) |field| {
-            @field(core.pipelines, field.name).deinit(core);
-        }
-    }
-};

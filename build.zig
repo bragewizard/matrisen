@@ -29,9 +29,9 @@ pub fn build(b: *Build) !void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "matrisen",
+        .name = "exe",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
+            .root_source_file = b.path("src/example/main.zig"),
             .optimize = optimize,
             .target = target,
             .imports = &.{
@@ -45,9 +45,8 @@ pub fn build(b: *Build) !void {
     exe.linkLibC();
     exe.linkSystemLibrary("SDL3");
     exe.linkSystemLibrary("vulkan");
-    exe.addCSourceFile(.{ .file = b.path("src/vk_mem_alloc.cpp"), .flags = &.{""} });
-    // TODO: replace with zigimg or my own
-    exe.addCSourceFile(.{ .file = b.path("src/stb_image.c"), .flags = &.{""} });
+    exe.addCSourceFile(.{ .file = b.path("src/clibs/vk_mem_alloc.cpp"), .flags = &.{""} });
+    exe.addCSourceFile(.{ .file = b.path("src/clibs/stb_image.c"), .flags = &.{""} });
 
     compile_all_shaders(b, exe);
     b.installArtifact(exe);

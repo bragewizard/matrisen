@@ -1,9 +1,9 @@
-const c = @import("../clibs.zig").libs;
+const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 const debug = @import("debug.zig");
-const Core = @import("core.zig");
+const Core = @import("Core.zig");
 const image = @import("image.zig");
-const alloc_cb = @import("core.zig").vkallocationcallbacks;
+const alloc_cb = Core.vkallocationcallbacks;
 const log = std.log.scoped(.swapchain);
 
 handle: c.VkSwapchainKHR = null,
@@ -31,7 +31,12 @@ pub const SupportInfo = struct {
             log.err("failed to alloc", .{});
             @panic("");
         };
-        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, present_modes.ptr));
+        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(
+            device,
+            surface,
+            &present_mode_count,
+            present_modes.ptr,
+        ));
 
         return .{
             .capabilities = capabilities,
@@ -62,7 +67,7 @@ pub const CreateOpts = struct {
 };
 
 pub fn init(core: *Core) void {
-    var images = &core.images;
+    var images = &core.imagemanager;
     const old_swapchain = null;
     const vsync = true;
     const desired_format = .{ .format = c.VK_FORMAT_B8G8R8A8_SRGB, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
@@ -152,7 +157,12 @@ pub fn init(core: *Core) void {
         @panic("");
     };
     errdefer a.free(swapchain_images);
-    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(core.device.handle, swapchain, &swapchain_image_count, swapchain_images.ptr));
+    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(
+        core.device.handle,
+        swapchain,
+        &swapchain_image_count,
+        swapchain_images.ptr,
+    ));
 
     // Create image views for the swapchain images.
     const swapchain_image_views = a.alloc(c.VkImageView, swapchain_image_count) catch {
@@ -167,7 +177,7 @@ pub fn init(core: *Core) void {
 
     images.swapchain_extent = extent;
     images.swapchain_format = format.format;
-    images.swapchain = swapchain_images;
+    images.swapchain_images = swapchain_images;
     images.swapchain_views = swapchain_image_views;
     core.swapchain.handle = swapchain;
 }

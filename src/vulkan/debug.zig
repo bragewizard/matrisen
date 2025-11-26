@@ -1,4 +1,4 @@
-const c = @import("../clibs.zig").libs;
+const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 
 pub fn check_vk(result: c.VkResult) !void {

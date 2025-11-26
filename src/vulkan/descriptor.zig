@@ -1,8 +1,8 @@
 const std = @import("std");
-const c = @import("../clibs.zig").libs;
+const c = @import("../clibs/clibs.zig").libs;
 const debug = @import("debug.zig");
 const check_vk = debug.check_vk;
-const Core = @import("core.zig");
+const Core = @import("Core.zig");
 
 pub const LayoutBuilder = struct {
     bindings: std.ArrayList(c.VkDescriptorSetLayoutBinding) = undefined,

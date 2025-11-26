@@ -1,13 +1,13 @@
-const c = @import("../clibs.zig").libs;
+const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.device);
-const Core = @import("core.zig");
+const Core = @import("Core.zig");
 const config = @import("config");
-const SwapchainSupportInfo = @import("swapchain.zig").SupportInfo;
-const vk_alloc_cbs = @import("core.zig").vk_alloc_cbs;
-const api_version = @import("instance.zig").api_version;
+const SwapchainSupportInfo = @import("Swapchain.zig").SupportInfo;
+const vk_alloc_cbs = Core.vk_alloc_cbs;
+const api_version = @import("Instance.zig").api_version;
 const required_device_extensions: []const [*c]const u8 = &.{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
 
 pub var vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = null;

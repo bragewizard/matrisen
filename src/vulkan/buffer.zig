@@ -1,24 +1,12 @@
-//! Bindless design
-//! Create large buffers
-//! Pass indices or addresses or both via a storage buffer
-//! use drawinderect to access that buffer and get the indices for materials
-//! and vertices osv...
-//!
-//! TODO make function for creating model buffer
-//! TODO make function for creating material buffer
-//!
-
 const std = @import("std");
-const c = @import("../clibs.zig").libs;
+const c = @import("../clibs/clibs.zig").libs;
 const linalg = @import("../linalg.zig");
 const debug = @import("debug.zig");
-const Core = @import("core.zig");
+const Core = @import("Core.zig");
 const AsyncContext = @import("command.zig").AsyncContext;
 const Vec3 = linalg.Vec3(f32);
 const Vec4 = linalg.Vec4(f32);
 const Mat4x4 = linalg.Mat4x4(f32);
-
-const Self = @This();
 
 pub const StaticBuffers = struct {
     indirect: AllocatedBuffer = undefined,
