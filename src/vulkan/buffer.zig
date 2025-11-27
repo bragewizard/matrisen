@@ -3,57 +3,15 @@ const c = @import("../clibs/clibs.zig").libs;
 const linalg = @import("../linalg.zig");
 const debug = @import("debug.zig");
 const Core = @import("Core.zig");
-const AsyncContext = @import("command.zig").AsyncContext;
+const AsyncContext = @import("AsyncContext.zig");
 const Vec3 = linalg.Vec3(f32);
 const Vec4 = linalg.Vec4(f32);
 const Mat4x4 = linalg.Mat4x4(f32);
-
-pub const StaticBuffers = struct {
-    indirect: AllocatedBuffer = undefined,
-    vertex: AllocatedBuffer = undefined,
-    index: AllocatedBuffer = undefined, //FIX figure out what to do about indexbuffers as they need to be bound
-    resourcetable: AllocatedBuffer = undefined,
-};
-
-pub const ResourceEntry = extern struct {
-    pose: u32,
-    object: u32,
-    vertex_offset: u32,
-};
 
 pub const AllocatedBuffer = struct {
     buffer: c.VkBuffer,
     allocation: c.VmaAllocation,
     info: c.VmaAllocationInfo,
-};
-
-pub const GeoSurface = struct {
-    start_index: u32,
-    count: u32,
-};
-
-pub const Vertex = extern struct {
-    position: Vec3,
-    uv_x: f32,
-    normal: Vec3,
-    uv_y: f32,
-    color: Vec4,
-
-    pub fn new(p0: Vec3, p1: Vec3, p2: Vec4, x: f32, y: f32) Vertex {
-        return .{
-            .position = p0,
-            .normal = p1,
-            .color = p2,
-            .uv_x = x,
-            .uv_y = y,
-        };
-    }
-};
-
-pub const MeshAsset = struct {
-    surfaces: std.ArrayList(GeoSurface),
-    vertices: []Vertex = undefined,
-    indices: []u32 = undefined,
 };
 
 pub fn createIndirect(core: *Core, command_count: u32) AllocatedBuffer {

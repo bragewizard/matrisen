@@ -6,10 +6,6 @@ const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.instance);
 
 pub const api_version = c.VK_MAKE_VERSION(1, 3, 0);
-const Instance = @This();
-
-handle: c.VkInstance = null,
-debug_messenger: c.VkDebugUtilsMessengerEXT = null,
 
 pub fn init(core: *Core, alloc: std.mem.Allocator) void {
     var sdl_required_extension_count: u32 = undefined;
@@ -126,15 +122,19 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
     else
         null;
 
-    core.instance.handle = instance;
-    core.instance.debug_messenger = debug_messenger;
+    core.instance_handle = instance;
+    core.debug_messenger = debug_messenger;
 }
 
-pub fn get_destroy_debug_utils_messenger_fn(instance: Instance) c.PFN_vkDestroyDebugUtilsMessengerEXT {
-    return get_vulkan_instance_funct(c.PFN_vkDestroyDebugUtilsMessengerEXT, instance.handle, "vkDestroyDebugUtilsMessengerEXT");
+pub fn getDestroyDebugUtilsMessengerFn(core: *Core) c.PFN_vkDestroyDebugUtilsMessengerEXT {
+    return get_vulkan_instance_funct(
+        c.PFN_vkDestroyDebugUtilsMessengerEXT,
+        core.instance_handle,
+        "vkDestroyDebugUtilsMessengerEXT",
+    );
 }
 
-pub fn default_debug_callback(
+pub fn defaultDebugCallback(
     severity: c.VkDebugUtilsMessageSeverityFlagBitsEXT,
     msg_type: c.VkDebugUtilsMessageTypeFlagsEXT,
     callback_data: ?*const c.VkDebugUtilsMessengerCallbackDataEXT,
@@ -181,7 +181,11 @@ fn create_debug_callback(
     debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT,
     alloc_cb: ?*c.VkAllocationCallbacks,
 ) c.VkDebugUtilsMessengerEXT {
-    const create_fn_opt = get_vulkan_instance_funct(c.PFN_vkCreateDebugUtilsMessengerEXT, instance, "vkCreateDebugUtilsMessengerEXT");
+    const create_fn_opt = get_vulkan_instance_funct(
+        c.PFN_vkCreateDebugUtilsMessengerEXT,
+        instance,
+        "vkCreateDebugUtilsMessengerEXT",
+    );
     if (create_fn_opt) |create_fn| {
         const create_info = std.mem.zeroInit(c.VkDebugUtilsMessengerCreateInfoEXT, .{
             .sType = c.VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -192,7 +196,7 @@ fn create_debug_callback(
                 c.VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                 c.VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                 c.VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-            .pfnUserCallback = debug_callback orelse default_debug_callback,
+            .pfnUserCallback = debug_callback orelse defaultDebugCallback,
             .pUserData = null,
         });
         var debug_messenger: c.VkDebugUtilsMessengerEXT = undefined;

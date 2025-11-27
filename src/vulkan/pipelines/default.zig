@@ -1,14 +1,12 @@
 const std = @import("std");
 const c = @import("../../clibs/clibs.zig").libs;
 const check_vk_panic = @import("../debug.zig").check_vk_panic;
-const descriptor = @import("../descriptor.zig");
-const vk_alloc_cbs = Core.vkallocationcallbacks;
 const buffer = @import("../buffer.zig");
 const linalg = @import("../../linalg");
 const Vec3 = linalg.Vec3(f32);
 const Vec4 = linalg.Vec4(f32);
 const PipelineBuilder = @import("../PipelineManager.zig");
-const FrameContext = @import("../command.zig").FrameContext;
+const FrameContext = @import("../FrameContext.zig");
 const Core = @import("../Core.zig");
 const Mat4x4 = linalg.Mat4x4(f32);
 
@@ -25,18 +23,18 @@ pub fn init(core: *Core) c.VkPipeline {
     const vertex_module = PipelineBuilder.createShaderModule(
         core.device.handle,
         &vertex_code,
-        vk_alloc_cbs,
+        core.vkallocationcallbacks,
     ) orelse null;
     const fragment_module = PipelineBuilder.createShaderModule(
         core.device.handle,
         &fragment_code,
-        vk_alloc_cbs,
+        core.vkallocationcallbacks,
     ) orelse null;
     if (vertex_module != null) std.log.info("Created vertex shader module", .{});
     if (fragment_module != null) std.log.info("Created fragment shader module", .{});
 
-    defer c.vkDestroyShaderModule(core.device.handle, vertex_module, vk_alloc_cbs);
-    defer c.vkDestroyShaderModule(core.device.handle, fragment_module, vk_alloc_cbs);
+    defer c.vkDestroyShaderModule(core.device.handle, vertex_module, core.vkallocationcallbacks);
+    defer c.vkDestroyShaderModule(core.device.handle, fragment_module, core.vkallocationcallbacks);
 
     const layouts = [_]c.VkDescriptorSetLayout{ core.scenedatalayout, core.resourcelayout };
 

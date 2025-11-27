@@ -1,23 +1,16 @@
-const c = @import("../clibs/clibs.zig");
+const c = @import("../clibs/clibs.zig").libs;
 const Core = @import("Core.zig");
-const FrameContext = @import("command.zig").FrameContext;
-const descriptor = @import("descriptor.zig");
-const vk_alloc_cbs = Core.vkallocationcallbacks;
+const FrameContext = @import("FrameContext.zig");
 
 const Self = @This();
 
-pipelinelayout: c.VkPipelineLayout = undefined,
 defaultpipeline: c.VkPipeline = undefined,
-resourcelayout: c.VkDescriptorSetLayout = undefined,
-scenedatalayout: c.VkDescriptorSetLayout = undefined,
-static_set: c.VkDescriptorSet = undefined,
-globaldescriptorallocator: descriptor.Allocator = .{},
 
 pub fn deinit(self: *Self, core: *Core) void {
-    c.vkDestroyDescriptorSetLayout(core.device.handle, self.scenedatalayout, vk_alloc_cbs);
-    c.vkDestroyDescriptorSetLayout(core.device.handle, self.resourcelayout, vk_alloc_cbs);
-    c.vkDestroyPipelineLayout(core.device.handle, self.layout, vk_alloc_cbs);
-    c.vkDestroyPipeline(core.device.handle, self.pipeline, vk_alloc_cbs);
+    c.vkDestroyDescriptorSetLayout(core.device.handle, self.scenedatalayout, core.vkallocationcallbacks);
+    c.vkDestroyDescriptorSetLayout(core.device.handle, self.resourcelayout, core.vkallocationcallbacks);
+    c.vkDestroyPipelineLayout(core.device.handle, self.layout, core.vkallocationcallbacks);
+    c.vkDestroyPipeline(core.device.handle, self.pipeline, core.vkallocationcallbacks);
 }
 
 pub fn draw(self: *Self, core: *Core, frame: *FrameContext) void {

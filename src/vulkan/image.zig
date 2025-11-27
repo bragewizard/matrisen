@@ -2,33 +2,31 @@ const c = @import("../clibs/clibs.zig").libs;
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const buffer = @import("buffer.zig");
-const command = @import("command.zig");
 const std = @import("std");
 const log = std.log.scoped(.images);
-const AsyncContext = command.AsyncContext;
+const AsyncContext = @import("AsyncContext.zig");
 const Vec4 = @import("../linalg.zig").Vec4(f32);
 const Core = @import("Core.zig");
+const transitionImage = @import("Renderer.zig").transitionImage;
 
-pub fn AllocatedImage(N: comptime_int) type {
-    return struct {
-        image: c.VkImage,
-        allocation: c.VmaAllocation,
-        views: [N]c.VkImageView,
-    };
-}
+pub const AllocatedImage = struct {
+    image: c.VkImage,
+    allocation: c.VmaAllocation,
+    view: c.VkImageView,
+};
 
 pub fn createRenderAttachments(core: *Core) void {
     const extent: c.VkExtent3D = .{
-        .width = core.imagemanager.swapchain_extent.width,
-        .height = core.imagemanager.swapchain_extent.height,
+        .width = core.swapchain_extent.width,
+        .height = core.swapchain_extent.height,
         .depth = 1,
     };
-    core.imagemanager.extent3d[0] = extent;
+    core.drawextent3d = extent;
 
     const draw_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = core.imagemanager.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -47,15 +45,15 @@ pub fn createRenderAttachments(core: *Core) void {
         core.gpuallocator,
         &draw_image_ci,
         &draw_image_ai,
-        &core.imagemanager.colorattachment.image,
-        &core.imagemanager.colorattachment.allocation,
+        &core.colorattachment.image,
+        &core.colorattachment.allocation,
         null,
     ));
     const draw_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = core.imagemanager.colorattachment.image,
+        .image = core.colorattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = core.imagemanager.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -66,15 +64,15 @@ pub fn createRenderAttachments(core: *Core) void {
     };
 
     check_vk_panic(c.vkCreateImageView(
-        core.device.handle,
+        core.device_handle,
         &draw_image_view_ci,
-        Core.vkallocationcallbacks,
-        &core.imagemanager.colorattachment.views[0],
+        core.vkallocationcallbacks,
+        &core.colorattachment.view,
     ));
     const resolved_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = core.imagemanager.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -94,15 +92,15 @@ pub fn createRenderAttachments(core: *Core) void {
         core.gpuallocator,
         &resolved_image_ci,
         &resolved_image_ai,
-        &core.imagemanager.resolvedattachment.image,
-        &core.imagemanager.resolvedattachment.allocation,
+        &core.resolvedattachment.image,
+        &core.resolvedattachment.allocation,
         null,
     ));
     const resolved_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = core.imagemanager.resolvedattachment.image,
+        .image = core.resolvedattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = core.imagemanager.renderattachmentformat,
+        .format = core.renderattachmentformat,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -113,17 +111,17 @@ pub fn createRenderAttachments(core: *Core) void {
     };
 
     check_vk_panic(c.vkCreateImageView(
-        core.device.handle,
+        core.device_handle,
         &resolved_view_ci,
-        Core.vkallocationcallbacks,
-        &core.imagemanager.resolvedattachment.views[0],
+        core.vkallocationcallbacks,
+        &core.resolvedattachment.view,
     ));
 
     const depth_extent = extent;
     const depth_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = core.imagemanager.depth_format,
+        .format = core.depth_format,
         .extent = depth_extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -137,16 +135,16 @@ pub fn createRenderAttachments(core: *Core) void {
         core.gpuallocator,
         &depth_image_ci,
         &draw_image_ai,
-        &core.imagemanager.depthstencilattachment.image,
-        &core.imagemanager.depthstencilattachment.allocation,
+        &core.depthstencilattachment.image,
+        &core.depthstencilattachment.allocation,
         null,
     ));
 
     const depth_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = core.imagemanager.depthstencilattachment.image,
+        .image = core.depthstencilattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = core.imagemanager.depth_format,
+        .format = core.depth_format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_DEPTH_BIT,
             .baseMipLevel = 0,
@@ -156,11 +154,24 @@ pub fn createRenderAttachments(core: *Core) void {
         },
     };
     check_vk_panic(c.vkCreateImageView(
-        core.device.handle,
+        core.device_handle,
         &depth_image_view_ci,
-        Core.vkallocationcallbacks,
-        &core.imagemanager.depthstencilattachment.views[0],
+        core.vkallocationcallbacks,
+        &core.depthstencilattachment.view,
     ));
+}
+
+pub fn deinitRenderAttachments(core: *Core) void {
+    c.vmaDestroyImage(core.gpuallocator, core.colorattachment.image, core.colorattachment.allocation);
+    c.vkDestroyImageView(core.device_handle, core.colorattachment.view, null);
+    c.vmaDestroyImage(core.gpuallocator, core.resolvedattachment.image, core.resolvedattachment.allocation);
+    c.vkDestroyImageView(core.device_handle, core.resolvedattachment.view, null);
+    c.vmaDestroyImage(core.gpuallocator, core.depthstencilattachment.image, core.depthstencilattachment.allocation);
+    c.vkDestroyImageView(core.device_handle, core.depthstencilattachment.view, null);
+    for (core.swapchain_views) |view| {
+        c.vkDestroyImageView(core.device_handle, view, null);
+    }
+    core.cpuallocator.free(core.swapchain_views);
 }
 
 // pub fn createDefaultTextures(core: *Core) void {
@@ -196,7 +207,7 @@ pub fn createRenderAttachments(core: *Core) void {
 //         false,
 //     );
 //     core.textures[1].views[0] = create_view(
-//         core.device.handle,
+//         core.device_handle,
 //         core.textures[1].image,
 //         c.VK_FORMAT_R8G8B8A8_UNORM,
 //         1,
@@ -224,35 +235,11 @@ pub fn createRenderAttachments(core: *Core) void {
 //         .minFilter = c.VK_FILTER_NEAREST,
 //     };
 
-//     check_vk_panic(c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[0]));
+//     check_vk_panic(c.vkCreateSampler(core.device_handle, &sampl, null, &core.samplers[0]));
 //     sampl.magFilter = c.VK_FILTER_LINEAR;
 //     sampl.minFilter = c.VK_FILTER_LINEAR;
-//     check_vk_panic(c.vkCreateSampler(core.device.handle, &sampl, null, &core.samplers[1]));
+//     check_vk_panic(c.vkCreateSampler(core.device_handle, &sampl, null, &core.samplers[1]));
 // }
-
-pub fn deinit(core: *Core) void {
-    c.vmaDestroyImage(core.gpuallocator, core.colorattachment.image, core.colorattachment.allocation);
-    c.vkDestroyImageView(core.device.handle, core.colorattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.resolvedattachment.image, core.resolvedattachment.allocation);
-    c.vkDestroyImageView(core.device.handle, core.resolvedattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.depthstencilattachment.image, core.depthstencilattachment.allocation);
-    c.vkDestroyImageView(core.device.handle, core.depthstencilattachment.views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.textures[0].image, core.textures[0].allocation);
-    // c.vkDestroyImageView(core.device.handle, core.textures[0].views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.textures[1].image, core.textures[1].allocation);
-    c.vkDestroyImageView(core.device.handle, core.textures[1].views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.textures[2].image, core.textures[2].allocation);
-    // c.vkDestroyImageView(core.device.handle, core.textures[2].views[0], null);
-    c.vmaDestroyImage(core.gpuallocator, core.textures[3].image, core.textures[3].allocation);
-    // c.vkDestroyImageView(core.device.handle, core.textures[3].views[0], null);
-    c.vkDestroySampler(core.device.handle, core.samplers[0], null);
-    c.vkDestroySampler(core.device.handle, core.samplers[1], null);
-    for (core.swapchain_views) |view| {
-        c.vkDestroyImageView(core.device.handle, view, null);
-    }
-    core.cpuallocator.free(core.swapchain);
-    core.cpuallocator.free(core.swapchain_views);
-}
 
 pub fn create(
     core: *Core,
@@ -357,7 +344,7 @@ pub fn create_upload(
     );
     AsyncContext.submitBegin(core);
     const cmd = core.asynccontext.command_buffer;
-    command.transition_image(
+    transitionImage(
         cmd,
         new_image.image,
         c.VK_IMAGE_LAYOUT_UNDEFINED,
@@ -383,7 +370,7 @@ pub fn create_upload(
         1,
         &image_copy_region,
     );
-    command.transition_image(
+    transitionImage(
         cmd,
         new_image.image,
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

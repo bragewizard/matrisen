@@ -1,6 +1,6 @@
 const c = @import("clibs/clibs.zig").libs;
 const std = @import("std");
-const vkallocationcallbacks = @import("vulkan/Core.zig").vkallocationcallbacks;
+const Core = @import("vulkan/Core.zig");
 
 const Self = @This();
 
@@ -20,8 +20,13 @@ pub fn deinit(self: *Self) void {
     c.SDL_Quit();
 }
 
-pub fn create_surface(self: *Self, instance: c.VkInstance, surface: *c.VkSurfaceKHR) void {
-    check_sdl_bool(c.SDL_Vulkan_CreateSurface(self.sdl_window, instance, vkallocationcallbacks, surface));
+pub fn create_surface(self: *Self, core: *Core) void {
+    check_sdl_bool(c.SDL_Vulkan_CreateSurface(
+        self.sdl_window,
+        core.instance_handle,
+        core.vkallocationcallbacks,
+        &core.surface,
+    ));
 }
 
 pub fn get_size(self: *Self, width: *u32, height: *u32) void {

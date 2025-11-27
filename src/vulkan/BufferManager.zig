@@ -1,8 +1,61 @@
-/// This module should take care of all created buffers, the design ideology is bindless with
-/// large buffers that gets allocated once and filled with indexoffsets, the descriptor
-const AllocatedBuffer = @import("buffer.zig");
+const std = @import("std");
+const linalg = @import("../linalg.zig");
+const debug = @import("debug.zig");
+const c = @import("../clibs/clibs.zig").libs;
+const DescriptorWriter = @import("DescriptorWriter.zig");
+const Vec3 = linalg.Vec3(f32);
+const Vec4 = linalg.Vec4(f32);
+const Mat4x4 = linalg.Mat4x4(f32);
 const Core = @import("Core.zig");
-const c = @import("../clibs/clibs.zig");
+
+pub const StaticBuffers = struct {
+    indirect: AllocatedBuffer = undefined,
+    vertex: AllocatedBuffer = undefined,
+    index: AllocatedBuffer = undefined, //FIX figure out what to do about indexbuffers as they need to be bound
+    resourcetable: AllocatedBuffer = undefined,
+};
+
+pub const ResourceEntry = extern struct {
+    pose: u32,
+    object: u32,
+    vertex_offset: u32,
+};
+
+pub const AllocatedBuffer = struct {
+    buffer: c.VkBuffer,
+    allocation: c.VmaAllocation,
+    info: c.VmaAllocationInfo,
+};
+
+pub const GeoSurface = struct {
+    start_index: u32,
+    count: u32,
+};
+
+pub const Vertex = extern struct {
+    position: Vec3,
+    uv_x: f32,
+    normal: Vec3,
+    uv_y: f32,
+    color: Vec4,
+
+    pub fn new(p0: Vec3, p1: Vec3, p2: Vec4, x: f32, y: f32) Vertex {
+        return .{
+            .position = p0,
+            .normal = p1,
+            .color = p2,
+            .uv_x = x,
+            .uv_y = y,
+        };
+    }
+};
+
+pub const MeshAsset = struct {
+    surfaces: std.ArrayList(GeoSurface),
+    vertices: []Vertex = undefined,
+    indices: []u32 = undefined,
+};
+
 const Self = @This();
 
 indexoffset: usize,
@@ -19,64 +72,64 @@ pub fn destroyBuffers(self: *Self, core: *Core) void {
     c.vmaDestroyBuffer(core.gpuallocator, self.buffers.poses.buffer, self.buffers.poses.allocation);
 }
 
-pub fn uploadSceneData(self: *Self, core: *Core, comptime data: T) void {
-    const current = core.framecontexts.current;
-    var frame = &core.framecontexts.frames[current];
-    var scene_uniform_data: *T = @ptrCast(@alignCast(self.data[current].scenedata.info.pMappedData.?));
-    scene_uniform_data.view = view;
-    scene_uniform_data.proj = Mat4x4.perspective(
-        std.math.degreesToRadians(60.0),
-        @as(f32, @floatFromInt(frame.draw_extent.width)) / @as(f32, @floatFromInt(frame.draw_extent.height)),
-        0.1,
-        1000.0,
-    );
-    scene_uniform_data.viewproj = Mat4x4.mul(scene_uniform_data.proj, scene_uniform_data.view);
-    scene_uniform_data.sunlight_dir = .{ .x = 0.1, .y = 0.1, .z = 1, .w = 1 };
-    scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
-    scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
+// pub fn uploadSceneData(self: *Self, core: *Core, comptime data: T) void {
+//     const current = core.framecontexts.current;
+//     var frame = &core.framecontexts.frames[current];
+//     var scene_uniform_data: *T = @ptrCast(@alignCast(self.data[current].scenedata.info.pMappedData.?));
+//     scene_uniform_data.view = view;
+//     scene_uniform_data.proj = Mat4x4.perspective(
+//         std.math.degreesToRadians(60.0),
+//         @as(f32, @floatFromInt(frame.draw_extent.width)) / @as(f32, @floatFromInt(frame.draw_extent.height)),
+//         0.1,
+//         1000.0,
+//     );
+//     scene_uniform_data.viewproj = Mat4x4.mul(scene_uniform_data.proj, scene_uniform_data.view);
+//     scene_uniform_data.sunlight_dir = .{ .x = 0.1, .y = 0.1, .z = 1, .w = 1 };
+//     scene_uniform_data.sunlight_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
+//     scene_uniform_data.ambient_color = .{ .x = 1, .y = 0.6, .z = 0, .w = 1 };
 
-    var poses: *[2]Mat4x4 = @ptrCast(@alignCast(self.data[current].poses.info.pMappedData.?));
+//     var poses: *[2]Mat4x4 = @ptrCast(@alignCast(self.data[current].poses.info.pMappedData.?));
 
-    var time: f32 = @floatFromInt(core.framenumber);
-    time /= 100;
-    var mod = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
-    mod = mod.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
-    mod = mod.translate(.{ .x = 2.0, .y = 2.0, .z = 2.0 });
-    poses[0] = Mat4x4.identity;
-    poses[1] = mod;
-}
+//     var time: f32 = @floatFromInt(core.framenumber);
+//     time /= 100;
+//     var mod = Mat4x4.rotation(.{ .x = 1.0, .y = 0.0, .z = 0.0 }, time / 2.0);
+//     mod = mod.rotate(.{ .x = 0.0, .y = 1.0, .z = 0.0 }, time);
+//     mod = mod.translate(.{ .x = 2.0, .y = 2.0, .z = 2.0 });
+//     poses[0] = Mat4x4.identity;
+//     poses[1] = mod;
+// }
 
+// pub fn idk(core: *Core) void {
+//     core.buffers.indirect = m.buffer.createIndirect(core, 1);
+//     const resourses1: m.buffer.ResourceEntry = .{ .pose = 0, .object = 0, .vertex_offset = 0 };
+//     const resourses2: m.buffer.ResourceEntry = .{ .pose = 1, .object = 1, .vertex_offset = 199 };
+//     const resources: [2]m.buffer.ResourceEntry = .{ resourses1, resourses2 };
+//     const resources_slice = std.mem.sliceAsBytes(&resources);
 
+//     self.sdata.resourcetable = m.buffer.createSSBO(core, resources_slice.len, true);
+//     m.buffer.upload(core, resources_slice, core.buffers.resourcetable);
 
-    core.buffers.indirect = m.buffer.createIndirect(core, 1);
-    const resourses1: m.buffer.ResourceEntry = .{ .pose = 0, .object = 0, .vertex_offset = 0 };
-    const resourses2: m.buffer.ResourceEntry = .{ .pose = 1, .object = 1, .vertex_offset = 199 };
-    const resources: [2]m.buffer.ResourceEntry = .{ resourses1, resourses2 };
-    const resources_slice = std.mem.sliceAsBytes(&resources);
+//     for (&self.data) |*data| {
+//         data.scenedata = buffer.create(
+//             core,
+//             @sizeOf(SceneDataUniform),
+//             m.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+//             m.VMA_MEMORY_USAGE_CPU_TO_GPU,
+//         );
 
-    self.sdata.resourcetable = m.buffer.createSSBO(core, resources_slice.len, true);
-    m.buffer.upload(core, resources_slice, core.buffers.resourcetable);
+//         data.poses = buffer.create(
+//             core,
+//             @sizeOf(Mat4x4) * 2,
+//             c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+//                 c.VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+//                 c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+//             c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+//         );
+//     }
+// }
 
-    for (&self.data) |*data| {
-        data.scenedata = buffer.create(
-            core,
-            @sizeOf(SceneDataUniform),
-            m.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            m.VMA_MEMORY_USAGE_CPU_TO_GPU,
-        );
-
-        data.poses = buffer.create(
-            core,
-            @sizeOf(Mat4x4) * 2,
-            c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                c.VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                c.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-            c.VMA_MEMORY_USAGE_CPU_TO_GPU,
-        );
-    }
-
-pub fn writeSetSBBO(self: *Self, core: *Core, data: buffer.AllocatedBuffer, T: type) void {
-    var writer = descriptor.Writer.init();
+pub fn writeSetSBBO(self: *Self, core: *Core, data: AllocatedBuffer, T: type) void {
+    var writer = DescriptorWriter.init();
     defer writer.deinit(core.cpuallocator);
     writer.writeBuffer(
         core.cpuallocator,
