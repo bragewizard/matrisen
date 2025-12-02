@@ -7,6 +7,7 @@ const Vec3 = linalg.Vec3(f32);
 const Vec4 = linalg.Vec4(f32);
 const Mat4x4 = linalg.Mat4x4(f32);
 const Core = @import("Core.zig");
+const AllocatedBuffer = @import("BufferAllocator.zig").AllocatedBuffer;
 
 pub const StaticBuffers = struct {
     indirect: AllocatedBuffer = undefined,
@@ -19,12 +20,6 @@ pub const ResourceEntry = extern struct {
     pose: u32,
     object: u32,
     vertex_offset: u32,
-};
-
-pub const AllocatedBuffer = struct {
-    buffer: c.VkBuffer,
-    allocation: c.VmaAllocation,
-    info: c.VmaAllocationInfo,
 };
 
 pub const GeoSurface = struct {

@@ -69,12 +69,11 @@ pub fn deinit(self: *Self, core: *Core) void {
 
 pub fn submitBegin(self: *Self, core: *Core) !void {
     const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
-    const images = &core.images;
     debug.check_vk_panic(c.vkWaitForFences(core.device_handle, 1, &self.render_fence, c.VK_TRUE, timeout));
 
     const e = c.vkAcquireNextImageKHR(
         core.device_handle,
-        core.swapchain.handle,
+        core.swapchain_handle,
         timeout,
         self.swapchain_semaphore,
         null,
@@ -99,39 +98,39 @@ pub fn submitBegin(self: *Self, core: *Core) !void {
     var draw_extent: c.VkExtent2D = .{};
     const render_scale = 1;
     draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(
-        images.swapchain_extent.width,
-        images.swapchain_extent.width,
+        core.swapchain_extent.width,
+        core.swapchain_extent.width,
     ))) * render_scale);
     draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(
-        images.swapchain_extent.height,
-        images.swapchain_extent.height,
+        core.swapchain_extent.height,
+        core.swapchain_extent.height,
     ))) * render_scale);
-    self.draw_extent = draw_extent;
+    core.drawextent2d = draw_extent;
 
     debug.check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
     const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.014, 0.014, 0.014, 1 } };
 
     transitionImage(
         cmd,
-        images.resolvedattachment.image,
+        core.resolvedattachment.image,
         c.VK_IMAGE_LAYOUT_UNDEFINED,
         c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     );
 
     const color_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = images.colorattachment.views[0],
+        .imageView = core.colorattachment.view,
         .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .resolveImageView = images.resolvedattachment.views[0],
+        .resolveImageView = core.resolvedattachment.view,
         .resolveImageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .resolveMode = c.VK_RESOLVE_MODE_AVERAGE_BIT,
         .clearValue = .{ .color = clearvalue },
     };
     const depth_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = images.depthstencilattachment.views[0],
+        .imageView = core.depthstencilattachment.view,
         .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -170,31 +169,30 @@ pub fn submitBegin(self: *Self, core: *Core) !void {
 }
 
 pub fn submitEnd(self: *Self, core: *Core) void {
-    const images = core.images;
     const cmd = self.command_buffer;
     c.vkCmdEndRendering(cmd);
     transitionImage(
         cmd,
-        images.resolvedattachment.image,
+        core.resolvedattachment.image,
         c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     );
     transitionImage(
         cmd,
-        images.swapchain[self.swapchain_image_index],
+        core.swapchain_images[self.swapchain_image_index],
         c.VK_IMAGE_LAYOUT_UNDEFINED,
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     );
     copyImageToImage(
         cmd,
-        images.resolvedattachment.image,
-        images.swapchain[self.swapchain_image_index],
-        self.draw_extent,
-        images.swapchain_extent,
+        core.resolvedattachment.image,
+        core.swapchain_images[self.swapchain_image_index],
+        core.drawextent2d,
+        core.swapchain_extent,
     );
     transitionImage(
         cmd,
-        core.images.swapchain[self.swapchain_image_index],
+        core.swapchain_images[self.swapchain_image_index],
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     );
@@ -228,7 +226,7 @@ pub fn submitEnd(self: *Self, core: *Core) void {
         .pSignalSemaphoreInfos = &signal_info,
     };
 
-    debug.check_vk(c.vkQueueSubmit2(core.device.graphics_queue, 1, &submit, self.render_fence)) catch |err| {
+    debug.check_vk(c.vkQueueSubmit2(core.graphics_queue, 1, &submit, self.render_fence)) catch |err| {
         std.log.err("Failed to submit to graphics queue with error: {s}", .{@errorName(err)});
         @panic("Failed to submit to graphics queue");
     };
@@ -238,10 +236,10 @@ pub fn submitEnd(self: *Self, core: *Core) void {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &self.render_semaphore,
         .swapchainCount = 1,
-        .pSwapchains = &core.swapchain.handle,
+        .pSwapchains = &core.swapchain_handle,
         .pImageIndices = &self.swapchain_image_index,
     };
-    _ = c.vkQueuePresentKHR(core.device.graphics_queue, &present_info);
+    _ = c.vkQueuePresentKHR(core.graphics_queue, &present_info);
     core.framenumber +%= 1;
     core.switch_frame();
 }

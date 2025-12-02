@@ -104,9 +104,8 @@ const App = @This();
 // }
 
 pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
-    // var timer = std.time.Timer.start() catch @panic("Failed to start timer");
-    // var delta: u64 = undefined;
-    _ = engine;
+    var timer = std.time.Timer.start() catch @panic("Failed to start timer");
+    var delta: u64 = undefined;
     std.debug.print("created engine\n", .{});
     // var camerarot: Quat = .identity;
     // var camerapos: Vec3 = .{ .x = 0, .y = -5, .z = 8 };
@@ -114,8 +113,8 @@ pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
     // camerarot.rotateYaw(std.math.degreesToRadians(180));
     // camerarot.rotateRoll(std.math.degreesToRadians(180));
 
-    m.Window.check_sdl_bool(m.clibs.SDL_SetWindowRelativeMouseMode(window.sdl_window, true));
-    // window.state.capture_mouse = true;
+    m.Window.check_sdl_bool(m.clibs.SDL_SetWindowRelativeMouseMode(window.sdl_window, false));
+    window.state.capture_mouse = true;
     _ = self;
     std.debug.print("starting", .{});
     // self.initScene(engine);
@@ -130,23 +129,23 @@ pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
         // if (window.state.e) camerapos.translateWorldZ(0.1);
         // camerarot.rotatePitch(-window.state.mouse_y / 150);
         // camerarot.rotateWorldZ(-window.state.mouse_x / 150);
-        // if (engine.framenumber % 100 == 0) {
-        //     delta = timer.read();
-        //     log.info("FPS: {d}                        \x1b[1A", .{
-        //         @as(u32, (@intFromFloat(100_000_000_000.0 / @as(f32, @floatFromInt(delta))))),
-        //     });
-        //     timer.reset();
-        // }
-        // if (engine.resizerequest) {
-        //     window.get_size(&engine.images.swapchain_extent.width, &engine.images.swapchain_extent.height);
-        //     m.Swapchain.resize(engine);
-        //     continue;
-        // }
-        // var frame = &engine.framecontexts.frames[engine.framecontexts.current];
-        // frame.submitBegin(engine) catch continue;
+        if (engine.framenumber % 100 == 0) {
+            delta = timer.read();
+            log.info("FPS: {d}                        \x1b[1A", .{
+                @as(u32, (@intFromFloat(100_000_000_000.0 / @as(f32, @floatFromInt(delta))))),
+            });
+            timer.reset();
+        }
+        if (engine.resizerequest) {
+            window.get_size(&engine.swapchain_extent.width, &engine.swapchain_extent.height);
+            m.swapchain.resize(engine);
+            continue;
+        }
+        var frame = &engine.framecontexts[engine.current_frame];
+        frame.submitBegin(engine) catch continue;
         // // self.uploadSceneData(engine, camerarot.view(camerapos));
         // // engine.pipelines.vertexshader.draw(engine, frame);
-        // frame.submitEnd(engine);
+        frame.submitEnd(engine);
     }
 }
 

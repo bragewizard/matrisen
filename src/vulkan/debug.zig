@@ -1,7 +1,7 @@
 const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 
-pub fn check_vk(result: c.VkResult) !void {
+pub fn checkVk(result: c.VkResult) !void {
     return switch (result) {
         c.VK_SUCCESS => {},
         c.VK_NOT_READY => error.vk_not_ready,
@@ -53,7 +53,7 @@ pub fn check_vk(result: c.VkResult) !void {
     };
 }
 
-pub fn check_vk_panic(result: c.VkResult) void {
+pub fn checkVkPanic(result: c.VkResult) void {
     switch (result) {
         c.VK_SUCCESS => {
             return;

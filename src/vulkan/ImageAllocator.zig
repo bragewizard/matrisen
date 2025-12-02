@@ -1,3 +1,4 @@
+const image = @import("image.zig");
 const c = @import("../clibs/clibs.zig").libs;
 const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
@@ -9,24 +10,36 @@ const Vec4 = @import("../linalg.zig").Vec4(f32);
 const Core = @import("Core.zig");
 const transitionImage = @import("Renderer.zig").transitionImage;
 
+const Self = @This();
+
+device: c.VkDevice,
+gpuallocator: c.VmaAllocator,
+allocationcallback: ?*c.VkAllocationCallbacks,
+
+pub fn init(device: c.VkDevice, gpuallocator: c.VmaAllocator, allocationcallback: ?*c.VkAllocationCallbacks) Self {
+    return .{
+        .device = device,
+        .allocationcallback = allocationcallback,
+        .gpuallocator = gpuallocator,
+    };
+}
+
 pub const AllocatedImage = struct {
     image: c.VkImage,
     allocation: c.VmaAllocation,
     view: c.VkImageView,
 };
 
-pub fn createRenderAttachments(core: *Core) void {
-    const extent: c.VkExtent3D = .{
-        .width = core.swapchain_extent.width,
-        .height = core.swapchain_extent.height,
-        .depth = 1,
-    };
-    core.drawextent3d = extent;
-
-    const draw_image_ci: c.VkImageCreateInfo = .{
+pub fn createDrawImage(
+    extent: c.VkExtent2D,
+    format: c.VkFormat,
+    gpuallocator: c.VmaAllocator,
+    device: c.VkDevice,
+) void {
+    const drawimageci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = core.renderattachmentformat,
+        .format = format,
         .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -36,24 +49,25 @@ pub fn createRenderAttachments(core: *Core) void {
             c.VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
     };
 
-    const draw_image_ai: c.VmaAllocationCreateInfo = .{
+    const drawimageai: c.VmaAllocationCreateInfo = .{
         .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
         .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     };
 
+    var drawimage: AllocatedImage = undefined;
     check_vk_panic(c.vmaCreateImage(
-        core.gpuallocator,
-        &draw_image_ci,
-        &draw_image_ai,
-        &core.colorattachment.image,
-        &core.colorattachment.allocation,
+        gpuallocator,
+        &drawimageci,
+        &drawimageai,
+        &drawimage.image,
+        &drawimage.allocation,
         null,
     ));
     const draw_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = core.colorattachment.image,
+        .image = drawimage.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = core.renderattachmentformat,
+        .format = format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -64,11 +78,14 @@ pub fn createRenderAttachments(core: *Core) void {
     };
 
     check_vk_panic(c.vkCreateImageView(
-        core.device_handle,
+        device,
         &draw_image_view_ci,
         core.vkallocationcallbacks,
         &core.colorattachment.view,
     ));
+}
+
+pub fn createRenderImage(core: *Core) void {
     const resolved_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
@@ -116,7 +133,9 @@ pub fn createRenderAttachments(core: *Core) void {
         core.vkallocationcallbacks,
         &core.resolvedattachment.view,
     ));
+}
 
+pub fn createDepthImage(core: *Core) void {
     const depth_extent = extent;
     const depth_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -161,13 +180,9 @@ pub fn createRenderAttachments(core: *Core) void {
     ));
 }
 
-pub fn deinitRenderAttachments(core: *Core) void {
+pub fn deinitImage(core: *Core) void {
     c.vmaDestroyImage(core.gpuallocator, core.colorattachment.image, core.colorattachment.allocation);
     c.vkDestroyImageView(core.device_handle, core.colorattachment.view, null);
-    c.vmaDestroyImage(core.gpuallocator, core.resolvedattachment.image, core.resolvedattachment.allocation);
-    c.vkDestroyImageView(core.device_handle, core.resolvedattachment.view, null);
-    c.vmaDestroyImage(core.gpuallocator, core.depthstencilattachment.image, core.depthstencilattachment.allocation);
-    c.vkDestroyImageView(core.device_handle, core.depthstencilattachment.view, null);
     for (core.swapchain_views) |view| {
         c.vkDestroyImageView(core.device_handle, view, null);
     }

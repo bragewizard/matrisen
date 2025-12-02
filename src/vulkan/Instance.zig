@@ -1,20 +1,23 @@
 const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
-const Core = @import("Core.zig");
-const check_vk = @import("debug.zig").check_vk;
-const check_vk_panic = @import("debug.zig").check_vk_panic;
+const checkVkPanic = @import("debug.zig").checkVkPanic;
 const log = std.log.scoped(.instance);
+const Core = @import("core.zig");
 
 pub const api_version = c.VK_MAKE_VERSION(1, 3, 0);
+const Self = @This();
 
-pub fn init(core: *Core, alloc: std.mem.Allocator) void {
+handle: c.VkInstance = null,
+debug_messenger: c.VkDebugUtilsMessengerEXT = null,
+
+pub fn init(alloc: std.mem.Allocator) Self {
     var sdl_required_extension_count: u32 = undefined;
     const sdl_extensions = c.SDL_Vulkan_GetInstanceExtensions(&sdl_required_extension_count);
     const sdl_extension_slice = sdl_extensions[0..sdl_required_extension_count];
     const engine_name = "matrisen";
     if (api_version > c.VK_MAKE_VERSION(1, 0, 0)) {
         var api_requested = api_version;
-        check_vk_panic(c.vkEnumerateInstanceVersion(@ptrCast(&api_requested)));
+        checkVkPanic(c.vkEnumerateInstanceVersion(@ptrCast(&api_requested)));
     }
     var debug = true;
     const required_extensions = sdl_extension_slice;
@@ -23,20 +26,20 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
 
     // Get supported layers and extensions
     var layer_count: u32 = undefined;
-    check_vk_panic(c.vkEnumerateInstanceLayerProperties(&layer_count, null));
+    checkVkPanic(c.vkEnumerateInstanceLayerProperties(&layer_count, null));
     const layer_props = alloc.alloc(c.VkLayerProperties, layer_count) catch {
         log.err("failed to alloc", .{});
         @panic("");
     };
-    check_vk_panic(c.vkEnumerateInstanceLayerProperties(&layer_count, layer_props.ptr));
+    checkVkPanic(c.vkEnumerateInstanceLayerProperties(&layer_count, layer_props.ptr));
 
     var extension_count: u32 = undefined;
-    check_vk_panic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, null));
+    checkVkPanic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, null));
     const extension_props = alloc.alloc(c.VkExtensionProperties, extension_count) catch {
         log.err("failed to append", .{});
         @panic("");
     };
-    check_vk_panic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, extension_props.ptr));
+    checkVkPanic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, extension_props.ptr));
 
     // Check if the validation layer is supported
     var layers = std.ArrayListUnmanaged([*c]const u8){};
@@ -114,22 +117,24 @@ pub fn init(core: *Core, alloc: std.mem.Allocator) void {
     };
 
     var instance: c.VkInstance = undefined;
-    check_vk_panic(c.vkCreateInstance(&instance_info, alloc_cb, &instance));
+    checkVkPanic(c.vkCreateInstance(&instance_info, alloc_cb, &instance));
     log.info("Created vulkan instance.", .{});
 
     const debug_messenger = if (debug)
-        create_debug_callback(instance, debug_callback, alloc_cb)
+        createDebugCallback(instance, debug_callback, alloc_cb)
     else
         null;
 
-    core.instance_handle = instance;
-    core.debug_messenger = debug_messenger;
+    return .{
+        instance,
+        debug_messenger,
+    };
 }
 
-pub fn getDestroyDebugUtilsMessengerFn(core: *Core) c.PFN_vkDestroyDebugUtilsMessengerEXT {
-    return get_vulkan_instance_funct(
+pub fn getDestroyDebugUtilsMessenger(self: Self) c.PFN_vkDestroyDebugUtilsMessengerEXT {
+    return getVulkanInstanceFunct(
         c.PFN_vkDestroyDebugUtilsMessengerEXT,
-        core.instance_handle,
+        self.handle,
         "vkDestroyDebugUtilsMessengerEXT",
     );
 }
@@ -167,7 +172,7 @@ pub fn defaultDebugCallback(
     return c.VK_FALSE;
 }
 
-fn get_vulkan_instance_funct(comptime Fn: type, instance: c.VkInstance, name: [*c]const u8) Fn {
+fn getVulkanInstanceFunct(comptime Fn: type, instance: c.VkInstance, name: [*c]const u8) Fn {
     const get_proc_addr: c.PFN_vkGetInstanceProcAddr = @ptrCast(c.SDL_Vulkan_GetVkGetInstanceProcAddr());
     if (get_proc_addr) |get_proc_addr_fn| {
         return @ptrCast(get_proc_addr_fn(instance, name));
@@ -176,12 +181,12 @@ fn get_vulkan_instance_funct(comptime Fn: type, instance: c.VkInstance, name: [*
     @panic("SDL_Vulkan_GetVkGetInstanceProcAddr returned null");
 }
 
-fn create_debug_callback(
+fn createDebugCallback(
     instance: c.VkInstance,
     debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT,
     alloc_cb: ?*c.VkAllocationCallbacks,
 ) c.VkDebugUtilsMessengerEXT {
-    const create_fn_opt = get_vulkan_instance_funct(
+    const create_fn_opt = getVulkanInstanceFunct(
         c.PFN_vkCreateDebugUtilsMessengerEXT,
         instance,
         "vkCreateDebugUtilsMessengerEXT",
@@ -200,9 +205,17 @@ fn create_debug_callback(
             .pUserData = null,
         });
         var debug_messenger: c.VkDebugUtilsMessengerEXT = undefined;
-        check_vk_panic(create_fn(instance, &create_info, alloc_cb, &debug_messenger));
+        checkVkPanic(create_fn(instance, &create_info, alloc_cb, &debug_messenger));
         log.info("Created vulkan debug messenger.", .{});
         return debug_messenger;
     }
     return null;
+}
+
+pub fn deinit(self: *Self) void {
+    defer c.vkDestroyInstance(self.instance.handle, self.allocationcallbacks);
+    defer if (self.debug_messenger != null) {
+        const destroyFn = getDestroyDebugUtilsMessenger(self).?;
+        destroyFn(self.instance.handle, self.instance.debug_messenger, self.allocationcallbacks);
+    };
 }

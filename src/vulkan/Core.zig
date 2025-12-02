@@ -9,17 +9,20 @@ const debug = @import("debug.zig");
 const c = @import("../clibs/clibs.zig").libs;
 const buffer = @import("buffer.zig");
 const image = @import("image.zig");
-const instance = @import("instance.zig");
-const swapchain = @import("swapchain.zig");
-const device = @import("device.zig");
 
+const Device = @import("Device.zig");
+const PhysicalDevice = @import("PhysicalDevice.zig");
+const Swapchain = @import("Swapchain.zig");
 const DescriptorLayoutBuilder = @import("DescriptorLayoutBuilder.zig");
+const Instance = @import("Instance.zig");
 const DescriptorAllocator = @import("DescriptorAllocator.zig");
 const DescriptorWriter = @import("DescriptorWriter.zig");
 const FrameContext = @import("FrameContext.zig");
 const AsyncContext = @import("AsyncContext.zig");
 const Window = @import("../Window.zig");
+const ImageAllocator = @import("ImageAllocator.zig");
 const ImageManager = @import("ImageManager.zig");
+const BufferAllocator = @import("BufferAllocator.zig");
 const BufferManager = @import("BufferManager.zig");
 const PipelineManager = @import("PipelineManager.zig");
 
@@ -32,104 +35,121 @@ framenumber: u64 = 0,
 current_frame: u8 = 0,
 
 /// Memory allocators
-cpuallocator: std.mem.Allocator = undefined,
-gpuallocator: c.VmaAllocator = undefined,
+cpuallocator: std.mem.Allocator,
+gpuallocator: c.VmaAllocator,
 
 /// Managers
-framecontexts: [multibuffering]FrameContext = .{FrameContext{}} ** multibuffering,
-asynccontext: AsyncContext = .{}, // manages sync and command independet of frame
+framecontexts: [multibuffering]FrameContext,
+asynccontext: AsyncContext, // manages sync and command independet of frame
 // imagemanager: ImageManager = .{}, // manages image resources linked to app (not screen, except maybe postprocesing)
 // buffermanager: BufferManager = .{}, // manages buffer resources
 // pipelinemanager: PipelineManager = .{},
 
 /// Vulkan essentials
-instance_handle: c.VkInstance = null,
-debug_messenger: c.VkDebugUtilsMessengerEXT = null,
-vkallocationcallbacks: ?*c.VkAllocationCallbacks = null,
-device_handle: c.VkDevice = null,
-graphics_queue: c.VkQueue = null,
-present_queue: c.VkQueue = null,
-compute_queue: c.VkQueue = null,
-transfer_queue: c.VkQueue = null,
-physical_device_handle: c.VkPhysicalDevice = null,
-properties: c.VkPhysicalDeviceProperties = undefined,
-graphics_queue_family: u32 = undefined,
-present_queue_family: u32 = undefined,
-compute_queue_family: u32 = undefined,
-transfer_queue_family: u32 = undefined,
+instance: Instance,
+device: Device,
+physicaldevice: PhysicalDevice,
+allocationcallbacks: ?*c.VkAllocationCallbacks,
 
 /// Layouts
-pipelinelayout: c.VkPipelineLayout = undefined,
-staticlayout: c.VkDescriptorSetLayout = undefined,
-dynamiclayout: c.VkDescriptorSetLayout = undefined,
-
+// pipelinelayout: c.VkPipelineLayout,
+// staticlayout: c.VkDescriptorSetLayout,
+// dynamiclayout: c.VkDescriptorSetLayout,
+imageallocator: ImageAllocator,
+bufferallocator: BufferAllocator,
 /// Global static set
-static_set: c.VkDescriptorSet = undefined,
-globaldescriptorallocator: DescriptorAllocator = .{},
+// staticset: c.VkDescriptorSet,
+// globaldescriptorallocator: DescriptorAllocator,
 
 /// Screen resources
-surface: c.VkSurfaceKHR = null,
-swapchain_handle: c.VkSwapchainKHR = null,
-renderattachmentformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT,
-depth_format: c.VkFormat = c.VK_FORMAT_D32_SFLOAT,
-drawextent3d: c.VkExtent3D = undefined,
-drawextent2d: c.VkExtent2D = undefined,
-colorattachment: image.AllocatedImage = undefined,
-resolvedattachment: image.AllocatedImage = undefined,
-depthstencilattachment: image.AllocatedImage = undefined,
-swapchain_format: c.VkFormat = undefined,
-swapchain_extent: c.VkExtent2D = .{},
-swapchain_images: []c.VkImage = &.{},
-swapchain_views: []c.VkImageView = &.{},
+surface: c.VkSurfaceKHR,
+swapchain: Swapchain,
+renderformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT,
+depthformat: c.VkFormat = c.VK_FORMAT_D32_SFLOAT,
+drawextent3d: c.VkExtent3D = .{ .width = 0, .height = 0, .depth = 0 },
+drawextent2d: c.VkExtent2D = .{ .width = 0, .height = 0 },
+drawimage: ImageAllocator.AllocatedImage = undefined,
+renderimage: ImageAllocator.AllocatedImage = undefined,
+depthimage: ImageAllocator.AllocatedImage = undefined,
 
 pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
-    var self: Self = .{};
-    self.swapchain_extent = .{ .width = 0, .height = 0 };
-    self.cpuallocator = allocator;
-    var initallocator = std.heap.ArenaAllocator.init(self.cpuallocator);
-    defer initallocator.deinit();
-    const initallocatorinstance = initallocator.allocator();
-    instance.init(&self, initallocatorinstance);
-    window.create_surface(&self);
-    window.get_size(&self.swapchain_extent.width, &self.swapchain_extent.height);
-    device.select(&self, initallocatorinstance);
-    device.initDevice(&self, initallocatorinstance);
-    swapchain.init(&self);
-    const allocator_ci: c.VmaAllocatorCreateInfo = .{
-        .physicalDevice = self.physical_device_handle,
-        .device = self.device_handle,
-        .instance = self.instance_handle,
-        .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    var arenaallocator = std.heap.ArenaAllocator.init(allocator);
+    defer arenaallocator.deinit();
+    const initallocator = arenaallocator.allocator();
+
+    const instance: Instance = .init(initallocator);
+    const allocationcallbacks: ?*c.VkAllocationCallbacks = null;
+    const surface = window.createSurface(instance, allocationcallbacks);
+    const physicaldevice: PhysicalDevice = .select(initallocator, instance.handle, surface);
+    const device: Device = .init(initallocator, physicaldevice);
+    const gpuallocator = makeGpuAllocator(physicaldevice.handle, device.handle, instance.handle);
+
+    var swapchainextent: c.VkExtent2D = .{ .width = 0, .height = 0 };
+    window.getSize(&swapchainextent.width, &swapchainextent.height);
+    const swapchain: Swapchain = .init(
+        allocator,
+        physicaldevice,
+        device.handle,
+        surface,
+        swapchainextent,
+        allocationcallbacks,
+    );
+    var imageallocator: ImageAllocator = .init(device, gpuallocator, allocationcallbacks);
+    const drawimage = imageallocator.createDrawImage();
+    const renderimage = imageallocator.createRenderImage();
+    const depthimage = imageallocator.createDepthImage();
+    var framecontexts: [multibuffering]FrameContext = @splat(.{});
+    for (&framecontexts) |*framecontext| framecontext.init();
+    const asynccontext: AsyncContext = .init();
+
+    const bufferallocator: BufferAllocator = .init();
+
+    return .{
+        .cpuallocator = allocator,
+        .gpuallocator = gpuallocator,
+        .allocationcallbacks = allocationcallbacks,
+        .asynccontext = asynccontext,
+        .framecontexts = framecontexts,
+        .swapchain = swapchain,
+        .instance = instance,
+        .device = device,
+        .physicaldevice = physicaldevice,
+        .drawimage = drawimage,
+        .renderimage = renderimage,
+        .depthimage = depthimage,
+        .imageallocator = imageallocator,
+        .bufferallocator = bufferallocator,
     };
-    debug.check_vk_panic(c.vmaCreateAllocator(&allocator_ci, &self.gpuallocator));
-    image.createRenderAttachments(&self);
-    for (&self.framecontexts) |*framecontext| {
-        framecontext.init(&self);
-    }
-    self.asynccontext.init(&self);
-    // image.createDefaultTextures(&self);
-    // initPipelineLayout(&self);
-    return self;
 }
 
 pub fn deinit(self: *Self) void {
-    debug.check_vk(c.vkDeviceWaitIdle(self.device_handle)) catch @panic("Failed to wait for device idle");
-    defer c.vkDestroyInstance(self.instance_handle, self.vkallocationcallbacks);
-    defer if (self.debug_messenger != null) {
-        const destroyFn = instance.getDestroyDebugUtilsMessengerFn(self).?;
-        destroyFn(self.instance_handle, self.debug_messenger, self.vkallocationcallbacks);
-    };
-    defer c.vkDestroySurfaceKHR(self.instance_handle, self.surface, self.vkallocationcallbacks);
-    defer c.vkDestroyDevice(self.device_handle, self.vkallocationcallbacks);
+    debug.checkVk(c.vkDeviceWaitIdle(self.device.handle)) catch @panic("Failed to wait for device idle");
+    defer self.instance.deinit();
+    defer c.vkDestroySurfaceKHR(self.instance.handle, self.surface, self.allocationcallbacks);
+    defer c.vkDestroyDevice(self.device.handle, self.allocationcallbacks);
     defer c.vmaDestroyAllocator(self.gpuallocator);
-    defer swapchain.deinit(self);
+    defer self.swapchain.deinit(self);
     defer image.deinitRenderAttachments(self);
-    for (&self.framecontexts) |*frame| {
-        defer frame.deinit(self);
-    }
+    defer for (&self.framecontexts) |*frame| frame.deinit(self);
     defer self.asynccontext.deinit(self);
 }
 
 pub fn switch_frame(self: *Self) void {
     self.current_frame = (self.current_frame + 1) % multibuffering;
+}
+
+fn makeGpuAllocator(
+    physical_device: c.VkPhysicalDevice,
+    device: c.VkDevice,
+    instance: c.VkInstance,
+) c.VmaAllocator {
+    var gpuallocator: c.VmaAllocator = undefined;
+    const allocator_ci: c.VmaAllocatorCreateInfo = .{
+        .physicalDevice = physical_device,
+        .device = device,
+        .instance = instance,
+        .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    };
+    debug.check_vk_panic(c.vmaCreateAllocator(&allocator_ci, &gpuallocator));
+    return gpuallocator;
 }

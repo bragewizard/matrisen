@@ -4,6 +4,15 @@ const debug = @import("debug.zig");
 const image = @import("image.zig");
 const log = std.log.scoped(.swapchain);
 const Core = @import("Core.zig");
+const PhysicalDevice = @import("PhysicalDevice.zig");
+
+const Self = @This();
+
+handle: c.VkSwapchainKHR = null,
+format: c.VkFormat = undefined,
+extent: c.VkExtent2D = .{},
+images: []c.VkImage = &.{},
+views: []c.VkImageView = &.{},
 
 const CreateOptions = struct {
     physical_device: c.VkPhysicalDevice,
@@ -62,16 +71,22 @@ pub const SupportInfo = struct {
     }
 };
 
-pub fn init(core: *Core) void {
+pub fn init(
+    allocator: std.mem.Allocator,
+    physicaldevice: PhysicalDevice,
+    device: c.VkDevice,
+    surface: c.VkSurfaceKHR,
+    extent: c.VkExtent2D,
+    allocationcallbacks: ?*c.VkAllocationCallbacks,
+) Self {
     const old_swapchain = null;
     const vsync = true;
     const desired_format = .{ .format = c.VK_FORMAT_B8G8R8A8_SRGB, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    const a = core.cpuallocator;
 
-    const support_info = SupportInfo.init(a, core.physical_device_handle, core.surface);
-    defer support_info.deinit(a);
-    var format = support_info.formats[0];
-    for (support_info.formats) |f| {
+    const supportinfo: SupportInfo = .init(allocator, physicaldevice, surface);
+    defer supportinfo.deinit(allocator);
+    var format = supportinfo.formats[0];
+    for (supportinfo.formats) |f| {
         if (f.format == desired_format.format and
             f.colorSpace == desired_format.colorSpace)
         {
@@ -79,7 +94,7 @@ pub fn init(core: *Core) void {
             break;
         }
     }
-    const present_mode = pick_present_mode(support_info.present_modes, vsync);
+    const present_mode = pickPresentMode(supportinfo.present_modes, vsync);
     // const present_mode_str = switch (present_mode) {
     //     c.Vk_PRESENT_MODE_FIFO_RELAXED_KHR => "FIFO Relaxed",
     //     c.Vk_PRESENT_MODE_MAILBOX_KHR => "Mailbox",
@@ -91,47 +106,47 @@ pub fn init(core: *Core) void {
     //     else => "unknown",
     // };
     // log.info("format: {s}, present mode: {s}", .{ format_str, present_mode_str });
-    var extent = c.VkExtent2D{ .width = core.swapchain_extent.width, .height = core.swapchain_extent.height };
-    extent.width = @max(support_info.capabilities.minImageExtent.width, @min(
-        support_info.capabilities.maxImageExtent.width,
-        extent.width,
+    var _extent = c.VkExtent2D{ .width = extent.width, .height = extent.height };
+    _extent.width = @max(supportinfo.capabilities.minImageExtent.width, @min(
+        supportinfo.capabilities.maxImageExtent.width,
+        _extent.width,
     ));
-    extent.height = @max(support_info.capabilities.minImageExtent.height, @min(
-        support_info.capabilities.maxImageExtent.height,
-        extent.height,
+    _extent.height = @max(supportinfo.capabilities.minImageExtent.height, @min(
+        supportinfo.capabilities.maxImageExtent.height,
+        _extent.height,
     ));
-    if (support_info.capabilities.currentExtent.width != std.math.maxInt(u32)) {
-        extent = support_info.capabilities.currentExtent;
+    if (supportinfo.capabilities.currentExtent.width != std.math.maxInt(u32)) {
+        _extent = supportinfo.capabilities.currentExtent;
     }
 
     const image_count = blk: {
-        const desired_count = support_info.capabilities.minImageCount + 1;
-        if (support_info.capabilities.maxImageCount > 0) {
-            break :blk @min(desired_count, support_info.capabilities.maxImageCount);
+        const desired_count = supportinfo.capabilities.minImageCount + 1;
+        if (supportinfo.capabilities.maxImageCount > 0) {
+            break :blk @min(desired_count, supportinfo.capabilities.maxImageCount);
         }
         break :blk desired_count;
     };
 
     var swapchain_info: c.VkSwapchainCreateInfoKHR = .{
         .sType = c.VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface = core.surface,
+        .surface = surface,
         .minImageCount = image_count,
         .imageFormat = format.format,
         .imageColorSpace = format.colorSpace,
         .imageExtent = extent,
         .imageArrayLayers = 1,
         .imageUsage = c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        .preTransform = support_info.capabilities.currentTransform,
+        .preTransform = supportinfo.capabilities.currentTransform,
         .compositeAlpha = c.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .presentMode = present_mode,
         .clipped = c.VK_TRUE,
         .oldSwapchain = old_swapchain,
     };
 
-    if (core.graphics_queue_family != core.present_queue_family) {
+    if (physicaldevice.graphics_queue_family != physicaldevice.present_queue_family) {
         const queue_family_indices: []const u32 = &.{
-            core.graphics_queue_family,
-            core.present_queue_family,
+            physicaldevice.graphics_queue_family,
+            physicaldevice.present_queue_family,
         };
         swapchain_info.imageSharingMode = c.VK_SHARING_MODE_CONCURRENT;
         swapchain_info.queueFamilyIndexCount = 2;
@@ -142,51 +157,62 @@ pub fn init(core: *Core) void {
 
     var swapchain: c.VkSwapchainKHR = undefined;
     debug.check_vk_panic(c.vkCreateSwapchainKHR(
-        core.device_handle,
+        device,
         &swapchain_info,
-        core.vkallocationcallbacks,
+        allocationcallbacks,
         &swapchain,
     ));
-    errdefer c.vkDestroySwapchainKHR(core.device_handle, swapchain, core.vkallocationcallbacks);
+    errdefer c.vkDestroySwapchainKHR(device, swapchain, allocationcallbacks);
 
     // Try and fetch the images from the swpachain.
     var swapchain_image_count: u32 = undefined;
-    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(core.device_handle, swapchain, &swapchain_image_count, null));
-    const swapchain_images = a.alloc(c.VkImage, swapchain_image_count) catch {
+    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, null));
+    const swapchain_images = allocator.alloc(c.VkImage, swapchain_image_count) catch {
         log.err("failed to alloc", .{});
         @panic("");
     };
-    errdefer a.free(swapchain_images);
+    errdefer allocator.free(swapchain_images);
     debug.check_vk_panic(c.vkGetSwapchainImagesKHR(
-        core.device_handle,
+        device,
         swapchain,
         &swapchain_image_count,
         swapchain_images.ptr,
     ));
 
     // Create image views for the swapchain images.
-    const swapchain_image_views = a.alloc(c.VkImageView, swapchain_image_count) catch {
+    const swapchain_image_views = allocator.alloc(c.VkImageView, swapchain_image_count) catch {
         log.err("failed to alloc", .{});
         @panic("");
     };
-    errdefer a.free(swapchain_image_views);
+    errdefer allocator.free(swapchain_image_views);
 
     for (swapchain_images, swapchain_image_views) |img, *view| {
-        view.* = create_swapchain_image_views(core.device_handle, img, format.format);
+        view.* = createImageViews(device, img, format.format);
     }
 
-    core.swapchain_extent = extent;
-    core.swapchain_format = format.format;
-    core.swapchain_images = swapchain_images;
-    core.swapchain_views = swapchain_image_views;
-    core.swapchain_handle = swapchain;
+    return .{
+        swapchain,
+        extent,
+        format.format,
+        swapchain_images,
+        swapchain_image_views,
+    };
 }
 
-pub fn deinit(core: *Core) void {
-    c.vkDestroySwapchainKHR(core.device_handle, core.swapchain_handle, null);
+pub fn deinit(
+    self: *Self,
+    allocator: std.mem.Allocator,
+    device: c.VkDevice,
+    allocationcallback: ?*c.VkAllocationCallbacks,
+) void {
+    c.vkDestroySwapchainKHR(device, self.handle, allocationcallback);
+    for (self.views) |view| {
+        c.vkDestroyImageView(device, view, null);
+    }
+    allocator.free(self.views);
 }
 
-fn pick_present_mode(modes: []const c.VkPresentModeKHR, vsync: bool) c.VkPresentModeKHR {
+fn pickPresentMode(modes: []const c.VkPresentModeKHR, vsync: bool) c.VkPresentModeKHR {
     if (vsync == true) {
         for (modes) |mode| {
             if (mode == c.VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
@@ -204,7 +230,7 @@ fn pick_present_mode(modes: []const c.VkPresentModeKHR, vsync: bool) c.VkPresent
     return c.VK_PRESENT_MODE_FIFO_KHR;
 }
 
-fn make_extent(capabilities: c.VkSurfaceCapabilitiesKHR, opts: CreateOptions) c.VkExtent2D {
+fn makeExtent(capabilities: c.VkSurfaceCapabilitiesKHR, opts: CreateOptions) c.VkExtent2D {
     if (capabilities.currentExtent.width != std.math.maxInt(u32)) {
         return capabilities.currentExtent;
     }
@@ -220,7 +246,7 @@ fn make_extent(capabilities: c.VkSurfaceCapabilitiesKHR, opts: CreateOptions) c.
     return extent;
 }
 
-fn create_swapchain_image_views(device: c.VkDevice, img: c.VkImage, format: c.VkFormat) c.VkImageView {
+fn createImageViews(device: c.VkDevice, img: c.VkImage, format: c.VkFormat) c.VkImageView {
     const view_info = std.mem.zeroInit(c.VkImageViewCreateInfo, .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = img,
@@ -254,26 +280,25 @@ pub fn resize(core: *Core) void {
     deinit(core);
     c.vmaDestroyImage(
         core.gpuallocator,
-        core.images.colorattachment.image,
-        core.images.colorattachment.allocation,
+        core.colorattachment.image,
+        core.colorattachment.allocation,
     );
-    c.vkDestroyImageView(core.device_handle, core.images.colorattachment.views[0], null);
+    c.vkDestroyImageView(core.device_handle, core.colorattachment.view, null);
     c.vmaDestroyImage(
         core.gpuallocator,
-        core.images.resolvedattachment.image,
-        core.images.resolvedattachment.allocation,
+        core.resolvedattachment.image,
+        core.resolvedattachment.allocation,
     );
-    c.vkDestroyImageView(core.device_handle, core.images.resolvedattachment.views[0], null);
+    c.vkDestroyImageView(core.device_handle, core.resolvedattachment.view, null);
     c.vmaDestroyImage(
         core.gpuallocator,
-        core.images.depthstencilattachment.image,
-        core.images.depthstencilattachment.allocation,
+        core.depthstencilattachment.image,
+        core.depthstencilattachment.allocation,
     );
-    c.vkDestroyImageView(core.device_handle, core.images.depthstencilattachment.views[0], null);
-    for (core.images.swapchain_views) |view| {
+    c.vkDestroyImageView(core.device_handle, core.depthstencilattachment.view, null);
+    for (core.swapchain_views) |view| {
         c.vkDestroyImageView(core.device_handle, view, null);
     }
-    core.swapchain = .{};
     init(core);
     image.createRenderAttachments(core);
     core.resizerequest = false;
