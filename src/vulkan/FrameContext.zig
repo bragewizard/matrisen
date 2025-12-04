@@ -3,6 +3,8 @@ const std = @import("std");
 const debug = @import("debug.zig");
 const log = std.log.scoped(.framecontext);
 const Core = @import("Core.zig");
+const Device = @import("Device.zig");
+const PhysicalDevice = @import("PhysicalDevice.zig");
 const DescriptorAllocator = @import("DescriptorAllocator.zig");
 const transitionImage = @import("Renderer.zig").transitionImage;
 const copyImageToImage = @import("Renderer.zig").copyImageToImage;
@@ -18,7 +20,12 @@ swapchain_image_index: u32 = 0,
 descriptorallocator: DescriptorAllocator = .{},
 dynamicset: c.VkDescriptorSet = undefined,
 
-pub fn init(self: *Self, core: *Core) void {
+pub fn init(
+    self: *Self,
+    device: Device,
+    physicaldevice: PhysicalDevice,
+    allocationcallbacks: ?*c.VkAllocationCallbacks,
+) void {
     const semaphore_ci = c.VkSemaphoreCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
@@ -27,53 +34,53 @@ pub fn init(self: *Self, core: *Core) void {
         .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = c.VK_FENCE_CREATE_SIGNALED_BIT,
     };
-    const command_pool_info = graphics_cmd_pool_info(core.graphics_queue_family);
-    debug.check_vk_panic(c.vkCreateCommandPool(
-        core.device_handle,
+    const command_pool_info = graphics_cmd_pool_info(physicaldevice.graphics_queue_family);
+    debug.checkVkPanic(c.vkCreateCommandPool(
+        device.handle,
         &command_pool_info,
-        core.vkallocationcallbacks,
+        allocationcallbacks,
         &self.command_pool,
     ));
     const command_buffer_info = graphics_cmdbuffer_info(self.command_pool);
-    debug.check_vk_panic(c.vkAllocateCommandBuffers(
-        core.device_handle,
+    debug.checkVkPanic(c.vkAllocateCommandBuffers(
+        device.handle,
         &command_buffer_info,
         &self.command_buffer,
     ));
-    debug.check_vk_panic(c.vkCreateSemaphore(
-        core.device_handle,
+    debug.checkVkPanic(c.vkCreateSemaphore(
+        device.handle,
         &semaphore_ci,
-        core.vkallocationcallbacks,
+        allocationcallbacks,
         &self.swapchain_semaphore,
     ));
-    debug.check_vk_panic(c.vkCreateSemaphore(
-        core.device_handle,
+    debug.checkVkPanic(c.vkCreateSemaphore(
+        device.handle,
         &semaphore_ci,
-        core.vkallocationcallbacks,
+        allocationcallbacks,
         &self.render_semaphore,
     ));
-    debug.check_vk_panic(c.vkCreateFence(
-        core.device_handle,
+    debug.checkVkPanic(c.vkCreateFence(
+        device.handle,
         &fence_ci,
-        core.vkallocationcallbacks,
+        allocationcallbacks,
         &self.render_fence,
     ));
 }
 
-pub fn deinit(self: *Self, core: *Core) void {
-    c.vkDestroyCommandPool(core.device_handle, self.command_pool, core.vkallocationcallbacks);
-    c.vkDestroyFence(core.device_handle, self.render_fence, core.vkallocationcallbacks);
-    c.vkDestroySemaphore(core.device_handle, self.render_semaphore, core.vkallocationcallbacks);
-    c.vkDestroySemaphore(core.device_handle, self.swapchain_semaphore, core.vkallocationcallbacks);
+pub fn deinit(self: *Self, device: Device, allocationcallbacks: ?*c.VkAllocationCallbacks) void {
+    c.vkDestroyCommandPool(device.handle, self.command_pool, allocationcallbacks);
+    c.vkDestroyFence(device.handle, self.render_fence, allocationcallbacks);
+    c.vkDestroySemaphore(device.handle, self.render_semaphore, allocationcallbacks);
+    c.vkDestroySemaphore(device.handle, self.swapchain_semaphore, allocationcallbacks);
 }
 
 pub fn submitBegin(self: *Self, core: *Core) !void {
     const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
-    debug.check_vk_panic(c.vkWaitForFences(core.device_handle, 1, &self.render_fence, c.VK_TRUE, timeout));
+    debug.checkVkPanic(c.vkWaitForFences(core.device.handle, 1, &self.render_fence, c.VK_TRUE, timeout));
 
     const e = c.vkAcquireNextImageKHR(
-        core.device_handle,
-        core.swapchain_handle,
+        core.device.handle,
+        core.swapchain.handle,
         timeout,
         self.swapchain_semaphore,
         null,
@@ -84,53 +91,39 @@ pub fn submitBegin(self: *Self, core: *Core) !void {
         return error.SwapchainOutOfDate;
     }
 
-    debug.check_vk(c.vkResetFences(core.device_handle, 1, &self.render_fence)) catch {
-        @panic("Failed to reset render fence");
-    };
-    debug.check_vk(c.vkResetCommandBuffer(self.command_buffer, 0)) catch @panic("Failed to reset command buffer");
+    debug.checkVkPanic(c.vkResetFences(core.device.handle, 1, &self.render_fence));
+    debug.checkVkPanic(c.vkResetCommandBuffer(self.command_buffer, 0));
 
     const cmd = self.command_buffer;
-    const cmd_begin_info = std.mem.zeroInit(c.VkCommandBufferBeginInfo, .{
+    const cmd_begin_info: c.VkCommandBufferBeginInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = c.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    });
+    };
 
-    var draw_extent: c.VkExtent2D = .{};
-    const render_scale = 1;
-    draw_extent.width = @intFromFloat(@as(f32, @floatFromInt(@min(
-        core.swapchain_extent.width,
-        core.swapchain_extent.width,
-    ))) * render_scale);
-    draw_extent.height = @intFromFloat(@as(f32, @floatFromInt(@min(
-        core.swapchain_extent.height,
-        core.swapchain_extent.height,
-    ))) * render_scale);
-    core.drawextent2d = draw_extent;
-
-    debug.check_vk(c.vkBeginCommandBuffer(cmd, &cmd_begin_info)) catch @panic("Failed to begin command buffer");
+    debug.checkVkPanic(c.vkBeginCommandBuffer(cmd, &cmd_begin_info));
     const clearvalue = c.VkClearColorValue{ .float32 = .{ 0.014, 0.014, 0.014, 1 } };
 
     transitionImage(
         cmd,
-        core.resolvedattachment.image,
+        core.renderimage.image,
         c.VK_IMAGE_LAYOUT_UNDEFINED,
         c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     );
 
     const color_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = core.colorattachment.view,
+        .imageView = core.drawimage.view,
         .imageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .resolveImageView = core.resolvedattachment.view,
+        .resolveImageView = core.renderimage.view,
         .resolveImageLayout = c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .resolveMode = c.VK_RESOLVE_MODE_AVERAGE_BIT,
         .clearValue = .{ .color = clearvalue },
     };
     const depth_attachment: c.VkRenderingAttachmentInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = core.depthstencilattachment.view,
+        .imageView = core.depthimage.view,
         .imageLayout = c.VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         .loadOp = c.VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = c.VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -141,7 +134,7 @@ pub fn submitBegin(self: *Self, core: *Core) !void {
         .sType = c.VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = .{
             .offset = .{ .x = 0, .y = 0 },
-            .extent = draw_extent,
+            .extent = core.drawextent2d,
         },
         .layerCount = 1,
         .colorAttachmentCount = 1,
@@ -152,15 +145,15 @@ pub fn submitBegin(self: *Self, core: *Core) !void {
     const viewport: c.VkViewport = .{
         .x = 0.0,
         .y = 0.0,
-        .width = @as(f32, @floatFromInt(draw_extent.width)),
-        .height = @as(f32, @floatFromInt(draw_extent.height)),
+        .width = @as(f32, @floatFromInt(core.drawextent2d.width)),
+        .height = @as(f32, @floatFromInt(core.drawextent2d.height)),
         .minDepth = 0.0,
         .maxDepth = 1.0,
     };
 
     const scissor: c.VkRect2D = .{
         .offset = .{ .x = 0, .y = 0 },
-        .extent = draw_extent,
+        .extent = core.drawextent2d,
     };
 
     c.vkCmdBeginRendering(cmd, &render_info);
@@ -173,31 +166,31 @@ pub fn submitEnd(self: *Self, core: *Core) void {
     c.vkCmdEndRendering(cmd);
     transitionImage(
         cmd,
-        core.resolvedattachment.image,
+        core.renderimage.image,
         c.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         c.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     );
     transitionImage(
         cmd,
-        core.swapchain_images[self.swapchain_image_index],
+        core.swapchain.images[self.swapchain_image_index],
         c.VK_IMAGE_LAYOUT_UNDEFINED,
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     );
     copyImageToImage(
         cmd,
-        core.resolvedattachment.image,
-        core.swapchain_images[self.swapchain_image_index],
+        core.renderimage.image,
+        core.swapchain.images[self.swapchain_image_index],
         core.drawextent2d,
-        core.swapchain_extent,
+        core.swapchainextent,
     );
     transitionImage(
         cmd,
-        core.swapchain_images[self.swapchain_image_index],
+        core.swapchain.images[self.swapchain_image_index],
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     );
 
-    debug.check_vk(c.vkEndCommandBuffer(cmd)) catch @panic("Failed to end command buffer");
+    debug.checkVkPanic(c.vkEndCommandBuffer(cmd));
 
     const cmd_info = c.VkCommandBufferSubmitInfo{
         .sType = c.VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
@@ -226,20 +219,17 @@ pub fn submitEnd(self: *Self, core: *Core) void {
         .pSignalSemaphoreInfos = &signal_info,
     };
 
-    debug.check_vk(c.vkQueueSubmit2(core.graphics_queue, 1, &submit, self.render_fence)) catch |err| {
-        std.log.err("Failed to submit to graphics queue with error: {s}", .{@errorName(err)});
-        @panic("Failed to submit to graphics queue");
-    };
+    debug.checkVkPanic(c.vkQueueSubmit2(core.device.graphics_queue, 1, &submit, self.render_fence));
 
     const present_info = c.VkPresentInfoKHR{
         .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &self.render_semaphore,
         .swapchainCount = 1,
-        .pSwapchains = &core.swapchain_handle,
+        .pSwapchains = &core.swapchain.handle,
         .pImageIndices = &self.swapchain_image_index,
     };
-    _ = c.vkQueuePresentKHR(core.graphics_queue, &present_info);
+    _ = c.vkQueuePresentKHR(core.device.graphics_queue, &present_info);
     core.framenumber +%= 1;
     core.switch_frame();
 }

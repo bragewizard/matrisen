@@ -1,7 +1,6 @@
 const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 const debug = @import("debug.zig");
-const image = @import("image.zig");
 const log = std.log.scoped(.swapchain);
 const Core = @import("Core.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
@@ -203,9 +202,9 @@ pub fn deinit(
     self: *Self,
     allocator: std.mem.Allocator,
     device: c.VkDevice,
-    allocationcallback: ?*c.VkAllocationCallbacks,
+    allocationcallbacks: ?*c.VkAllocationCallbacks,
 ) void {
-    c.vkDestroySwapchainKHR(device, self.handle, allocationcallback);
+    c.vkDestroySwapchainKHR(device, self.handle, allocationcallbacks);
     for (self.views) |view| {
         c.vkDestroyImageView(device, view, null);
     }
@@ -270,36 +269,4 @@ fn createImageViews(device: c.VkDevice, img: c.VkImage, format: c.VkFormat) c.Vk
     var image_view: c.VkImageView = undefined;
     debug.check_vk_panic(c.vkCreateImageView(device, &view_info, null, &image_view));
     return image_view;
-}
-
-pub fn resize(core: *Core) void {
-    debug.check_vk(c.vkDeviceWaitIdle(core.device_handle)) catch |err| {
-        std.log.err("Failed to wait for device idle with error: {s}", .{@errorName(err)});
-        @panic("Failed to wait for device idle");
-    };
-    deinit(core);
-    c.vmaDestroyImage(
-        core.gpuallocator,
-        core.colorattachment.image,
-        core.colorattachment.allocation,
-    );
-    c.vkDestroyImageView(core.device_handle, core.colorattachment.view, null);
-    c.vmaDestroyImage(
-        core.gpuallocator,
-        core.resolvedattachment.image,
-        core.resolvedattachment.allocation,
-    );
-    c.vkDestroyImageView(core.device_handle, core.resolvedattachment.view, null);
-    c.vmaDestroyImage(
-        core.gpuallocator,
-        core.depthstencilattachment.image,
-        core.depthstencilattachment.allocation,
-    );
-    c.vkDestroyImageView(core.device_handle, core.depthstencilattachment.view, null);
-    for (core.swapchain_views) |view| {
-        c.vkDestroyImageView(core.device_handle, view, null);
-    }
-    init(core);
-    image.createRenderAttachments(core);
-    core.resizerequest = false;
 }

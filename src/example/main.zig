@@ -113,7 +113,7 @@ pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
     // camerarot.rotateYaw(std.math.degreesToRadians(180));
     // camerarot.rotateRoll(std.math.degreesToRadians(180));
 
-    m.Window.check_sdl_bool(m.clibs.SDL_SetWindowRelativeMouseMode(window.sdl_window, false));
+    m.Window.checkSdl(m.clibs.SDL_SetWindowRelativeMouseMode(window.handle, false));
     window.state.capture_mouse = true;
     _ = self;
     std.debug.print("starting", .{});
@@ -137,8 +137,7 @@ pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
             timer.reset();
         }
         if (engine.resizerequest) {
-            window.get_size(&engine.swapchain_extent.width, &engine.swapchain_extent.height);
-            m.swapchain.resize(engine);
+            engine.resize(window);
             continue;
         }
         var frame = &engine.framecontexts[engine.current_frame];

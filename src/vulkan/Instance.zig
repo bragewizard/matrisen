@@ -2,7 +2,7 @@ const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 const checkVkPanic = @import("debug.zig").checkVkPanic;
 const log = std.log.scoped(.instance);
-const Core = @import("core.zig");
+const Core = @import("Core.zig");
 
 pub const api_version = c.VK_MAKE_VERSION(1, 3, 0);
 const Self = @This();

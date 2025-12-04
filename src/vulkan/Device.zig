@@ -1,6 +1,6 @@
 const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
-const check_vk_panic = @import("debug.zig").check_vk_panic;
+const checkVkPanic = @import("debug.zig").checkVkPanic;
 const log = std.log.scoped(.device);
 const required_device_extensions: []const [*c]const u8 = &.{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
 const PhysicalDevice = @import("PhysicalDevice.zig");
@@ -10,6 +10,10 @@ pub var vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = null;
 const Self = @This();
 
 handle: c.VkDevice,
+graphics_queue: c.VkQueue,
+present_queue: c.VkQueue,
+compute_queue: c.VkQueue,
+transfer_queue: c.VkQueue,
 
 pub fn init(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Self {
     const alloc_cb: ?*c.VkAllocationCallbacks = null;
@@ -94,7 +98,7 @@ pub fn init(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Self {
     };
 
     var device: c.VkDevice = undefined;
-    check_vk_panic(c.vkCreateDevice(physical_device.handle, &device_info, alloc_cb, &device));
+    checkVkPanic(c.vkCreateDevice(physical_device.handle, &device_info, alloc_cb, &device));
 
     var graphics_queue: c.VkQueue = undefined;
     c.vkGetDeviceQueue(device, physical_device.graphics_queue_family, 0, &graphics_queue);
@@ -113,11 +117,11 @@ pub fn init(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Self {
     vkCmdDrawMeshTasksEXT = procAddr;
 
     return .{
-        device,
-        graphics_queue,
-        present_queue,
-        compute_queue,
-        transfer_queue,
+        .handle = device,
+        .graphics_queue = graphics_queue,
+        .present_queue = present_queue,
+        .compute_queue = compute_queue,
+        .transfer_queue = transfer_queue,
     };
 }
 

@@ -4,10 +4,10 @@ const check_vk = @import("debug.zig").check_vk;
 const check_vk_panic = @import("debug.zig").check_vk_panic;
 const log = std.log.scoped(.device);
 const config = @import("config");
-const api_version = @import("instance.zig").api_version;
+const api_version = @import("Instance.zig").api_version;
 const required_device_extensions: []const [*c]const u8 = &.{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
 const Core = @import("Core.zig");
-const SwapchainSupportInfo = @import("swapchain.zig").SupportInfo;
+const SwapchainSupportInfo = @import("Swapchain.zig").SupportInfo;
 
 pub var vkCmdDrawMeshTasksEXT: c.PFN_vkCmdDrawMeshTasksEXT = null;
 const INVALID_QUEUE_FAMILY_INDEX = std.math.maxInt(u32);
@@ -27,7 +27,7 @@ present_queue_family: u32 = undefined,
 compute_queue_family: u32 = undefined,
 transfer_queue_family: u32 = undefined,
 
-pub fn select(alloc: std.mem.Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) void {
+pub fn select(alloc: std.mem.Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) Self {
     const criteria = PhysicalDeviceSelectionCriteria.PreferDiscrete;
     var physical_device_count: u32 = undefined;
     check_vk_panic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, null));

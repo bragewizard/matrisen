@@ -19,7 +19,7 @@ pub fn init(width: u32, height: u32) Self {
 }
 
 pub fn deinit(self: *Self) void {
-    c.SDL_DestroyWindow(self.sdl_window);
+    c.SDL_DestroyWindow(self.handle);
     c.SDL_Quit();
 }
 
@@ -30,7 +30,7 @@ pub fn createSurface(
 ) c.VkSurfaceKHR {
     var surface: c.VkSurfaceKHR = undefined;
     checkSdl(c.SDL_Vulkan_CreateSurface(
-        self.sdl_window,
+        self.handle,
         instance.handle,
         allocationcallbacks,
         &surface,

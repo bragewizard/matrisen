@@ -1,10 +1,8 @@
-pub const buffer = @import("vulkan/buffer.zig");
-pub const image = @import("vulkan/image.zig");
 pub const clibs = @import("clibs/clibs.zig").libs;
 pub const linalg = @import("linalg.zig");
 pub const defaultpipeline = @import("vulkan/pipelines/default.zig");
-pub const swapchain = @import("vulkan/swapchain.zig");
 
+pub const Swapchain = @import("vulkan/Swapchain.zig");
 pub const PipelineBuilder = @import("vulkan/PipelineBuilder.zig");
 pub const Gltf = @import("gltf/Gltf.zig");
 pub const Window = @import("Window.zig");

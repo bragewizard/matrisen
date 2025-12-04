@@ -1,7 +1,6 @@
 const std = @import("std");
 const c = @import("../../clibs/clibs.zig").libs;
 const check_vk_panic = @import("../debug.zig").check_vk_panic;
-const buffer = @import("../buffer.zig");
 const linalg = @import("../../linalg");
 const Vec3 = linalg.Vec3(f32);
 const Vec4 = linalg.Vec4(f32);

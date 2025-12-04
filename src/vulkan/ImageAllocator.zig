@@ -1,8 +1,5 @@
-const image = @import("image.zig");
 const c = @import("../clibs/clibs.zig").libs;
-const check_vk = @import("debug.zig").check_vk;
-const check_vk_panic = @import("debug.zig").check_vk_panic;
-const buffer = @import("buffer.zig");
+const checkVkPanic = @import("debug.zig").checkVkPanic;
 const std = @import("std");
 const log = std.log.scoped(.images);
 const AsyncContext = @import("AsyncContext.zig");
@@ -14,12 +11,12 @@ const Self = @This();
 
 device: c.VkDevice,
 gpuallocator: c.VmaAllocator,
-allocationcallback: ?*c.VkAllocationCallbacks,
+allocationcallbacks: ?*c.VkAllocationCallbacks,
 
-pub fn init(device: c.VkDevice, gpuallocator: c.VmaAllocator, allocationcallback: ?*c.VkAllocationCallbacks) Self {
+pub fn init(device: c.VkDevice, gpuallocator: c.VmaAllocator, allocationcallbacks: ?*c.VkAllocationCallbacks) Self {
     return .{
         .device = device,
-        .allocationcallback = allocationcallback,
+        .allocationcallbacks = allocationcallbacks,
         .gpuallocator = gpuallocator,
     };
 }
@@ -31,16 +28,17 @@ pub const AllocatedImage = struct {
 };
 
 pub fn createDrawImage(
+    self: *Self,
     extent: c.VkExtent2D,
     format: c.VkFormat,
-    gpuallocator: c.VmaAllocator,
-    device: c.VkDevice,
-) void {
+) AllocatedImage {
+    var drawimage: AllocatedImage = undefined;
+    const extent3d: c.VkExtent3D = .{ .width = extent.width, .height = extent.height, .depth = 1 };
     const drawimageci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
         .format = format,
-        .extent = extent,
+        .extent = extent3d,
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = c.VK_SAMPLE_COUNT_4_BIT,
@@ -54,9 +52,8 @@ pub fn createDrawImage(
         .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     };
 
-    var drawimage: AllocatedImage = undefined;
-    check_vk_panic(c.vmaCreateImage(
-        gpuallocator,
+    checkVkPanic(c.vmaCreateImage(
+        self.gpuallocator,
         &drawimageci,
         &drawimageai,
         &drawimage.image,
@@ -77,20 +74,27 @@ pub fn createDrawImage(
         },
     };
 
-    check_vk_panic(c.vkCreateImageView(
-        device,
+    checkVkPanic(c.vkCreateImageView(
+        self.device,
         &draw_image_view_ci,
-        core.vkallocationcallbacks,
-        &core.colorattachment.view,
+        self.allocationcallbacks,
+        &drawimage.view,
     ));
+    return drawimage;
 }
 
-pub fn createRenderImage(core: *Core) void {
+pub fn createRenderImage(
+    self: *Self,
+    extent: c.VkExtent2D,
+    format: c.VkFormat,
+) AllocatedImage {
+    var renderimage: AllocatedImage = undefined;
+    const extent3d: c.VkExtent3D = .{ .width = extent.width, .height = extent.height, .depth = 1 };
     const resolved_image_ci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = core.renderattachmentformat,
-        .extent = extent,
+        .format = format,
+        .extent = extent3d,
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = c.VK_SAMPLE_COUNT_1_BIT,
@@ -105,19 +109,19 @@ pub fn createRenderImage(core: *Core) void {
         .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     };
 
-    check_vk_panic(c.vmaCreateImage(
-        core.gpuallocator,
+    checkVkPanic(c.vmaCreateImage(
+        self.gpuallocator,
         &resolved_image_ci,
         &resolved_image_ai,
-        &core.resolvedattachment.image,
-        &core.resolvedattachment.allocation,
+        &renderimage.image,
+        &renderimage.allocation,
         null,
     ));
     const resolved_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = core.resolvedattachment.image,
+        .image = self.resolvedattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = core.renderattachmentformat,
+        .format = self.renderattachmentformat,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -127,21 +131,31 @@ pub fn createRenderImage(core: *Core) void {
         },
     };
 
-    check_vk_panic(c.vkCreateImageView(
-        core.device_handle,
+    checkVkPanic(c.vkCreateImageView(
+        self.device,
         &resolved_view_ci,
-        core.vkallocationcallbacks,
-        &core.resolvedattachment.view,
+        self.allocationcallbacks,
+        &renderimage.view,
     ));
+    return renderimage;
 }
 
-pub fn createDepthImage(core: *Core) void {
-    const depth_extent = extent;
-    const depth_image_ci: c.VkImageCreateInfo = .{
+pub fn createDepthImage(
+    self: *Self,
+    extent: c.VkExtent3D,
+    format: c.VkFormat,
+) AllocatedImage {
+    var depthimage: AllocatedImage = undefined;
+    const drawimageai: c.VmaAllocationCreateInfo = .{
+        .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
+        .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    };
+
+    const depthimageci: c.VkImageCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = c.VK_IMAGE_TYPE_2D,
-        .format = core.depth_format,
-        .extent = depth_extent,
+        .format = format,
+        .extent = extent,
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = c.VK_SAMPLE_COUNT_4_BIT,
@@ -150,20 +164,20 @@ pub fn createDepthImage(core: *Core) void {
             c.VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
     };
 
-    check_vk_panic(c.vmaCreateImage(
-        core.gpuallocator,
-        &depth_image_ci,
-        &draw_image_ai,
-        &core.depthstencilattachment.image,
-        &core.depthstencilattachment.allocation,
+    checkVkPanic(c.vmaCreateImage(
+        self.gpuallocator,
+        &depthimageci,
+        &drawimageai,
+        &depthimage.image,
+        &depthimage.allocation,
         null,
     ));
 
     const depth_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = core.depthstencilattachment.image,
+        .image = self.depthstencilattachment.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = core.depth_format,
+        .format = self.depth_format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_DEPTH_BIT,
             .baseMipLevel = 0,
@@ -172,24 +186,21 @@ pub fn createDepthImage(core: *Core) void {
             .layerCount = 1,
         },
     };
-    check_vk_panic(c.vkCreateImageView(
-        core.device_handle,
+    checkVkPanic(c.vkCreateImageView(
+        self.device_handle,
         &depth_image_view_ci,
-        core.vkallocationcallbacks,
-        &core.depthstencilattachment.view,
+        self.allocationcallbacks,
+        &depthimage.view,
     ));
+    return depthimage;
 }
 
-pub fn deinitImage(core: *Core) void {
-    c.vmaDestroyImage(core.gpuallocator, core.colorattachment.image, core.colorattachment.allocation);
-    c.vkDestroyImageView(core.device_handle, core.colorattachment.view, null);
-    for (core.swapchain_views) |view| {
-        c.vkDestroyImageView(core.device_handle, view, null);
-    }
-    core.cpuallocator.free(core.swapchain_views);
+pub fn deinitImage(self: *Self, image: AllocatedImage) void {
+    c.vmaDestroyImage(self.gpuallocator, image.image, image.allocation);
+    c.vkDestroyImageView(self.device, image.view, self.allocationcallback);
 }
 
-// pub fn createDefaultTextures(core: *Core) void {
+// pub fn createDefaultTextures(self: *self) void {
 //     const size = c.VkExtent3D{ .width = 1, .height = 1, .depth = 1 };
 //     var white: u32 = Vec4.packU8(.{ .x = 1, .y = 1, .z = 1, .w = 1 });
 //     var grey: u32 = Vec4.packU8(.{ .x = 0.2, .y = 0.2, .z = 0.2, .w = 1 });
@@ -197,33 +208,33 @@ pub fn deinitImage(core: *Core) void {
 //     const grey2 = Vec4.packU8(.{ .x = 0.08, .y = 0.08, .z = 0.08, .w = 1 });
 //     var black: u32 = Vec4.packU8(.{ .x = 0, .y = 0, .z = 0, .w = 1 });
 
-//     core.textures[0] = create_upload(
-//         core,
+//     self.textures[0] = create_upload(
+//         self,
 //         &white,
 //         size,
 //         c.VK_FORMAT_R8G8B8A8_UNORM,
 //         c.VK_IMAGE_USAGE_SAMPLED_BIT,
 //         false,
 //     );
-//     core.textures[1] = create_upload(
-//         core,
+//     self.textures[1] = create_upload(
+//         self,
 //         &grey,
 //         size,
 //         c.VK_FORMAT_R8G8B8A8_UNORM,
 //         c.VK_IMAGE_USAGE_SAMPLED_BIT,
 //         false,
 //     );
-//     core.textures[2] = create_upload(
-//         core,
+//     self.textures[2] = create_upload(
+//         self,
 //         &black,
 //         size,
 //         c.VK_FORMAT_R8G8B8A8_UNORM,
 //         c.VK_IMAGE_USAGE_SAMPLED_BIT,
 //         false,
 //     );
-//     core.textures[1].views[0] = create_view(
-//         core.device_handle,
-//         core.textures[1].image,
+//     self.textures[1].views[0] = create_view(
+//         self.device_handle,
+//         self.textures[1].image,
 //         c.VK_FORMAT_R8G8B8A8_UNORM,
 //         1,
 //     );
@@ -235,8 +246,8 @@ pub fn deinitImage(core: *Core) void {
 //             checker[y * 16 + x] = if (tile == 1) grey1 else grey2;
 //         }
 //     }
-//     core.textures[3] = create_upload(
-//         core,
+//     self.textures[3] = create_upload(
+//         self,
 //         &checker,
 //         .{ .width = 16, .height = 16, .depth = 1 },
 //         c.VK_FORMAT_R8G8B8A8_UNORM,
@@ -250,19 +261,19 @@ pub fn deinitImage(core: *Core) void {
 //         .minFilter = c.VK_FILTER_NEAREST,
 //     };
 
-//     check_vk_panic(c.vkCreateSampler(core.device_handle, &sampl, null, &core.samplers[0]));
+//     checkVkPanic(c.vkCreateSampler(self.device_handle, &sampl, null, &self.samplers[0]));
 //     sampl.magFilter = c.VK_FILTER_LINEAR;
 //     sampl.minFilter = c.VK_FILTER_LINEAR;
-//     check_vk_panic(c.vkCreateSampler(core.device_handle, &sampl, null, &core.samplers[1]));
+//     checkVkPanic(c.vkCreateSampler(self.device_handle, &sampl, null, &self.samplers[1]));
 // }
 
 pub fn create(
-    core: *Core,
+    self: *Self,
     size: c.VkExtent3D,
     format: c.VkFormat,
     usage: c.VkImageUsageFlags,
     mipmapped: bool,
-) AllocatedImage(1) {
+) AllocatedImage {
     var new_image: AllocatedImage(1) = undefined;
     var img_info = c.VkImageCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -282,12 +293,12 @@ pub fn create(
         img_info.mipLevels = @intFromFloat(levels);
     }
 
-    const alloc_info = std.mem.zeroInit(c.VmaAllocationCreateInfo, .{
+    const alloc_info: c.VmaAllocationCreateInfo = .{
         .usage = c.VMA_MEMORY_USAGE_GPU_ONLY,
         .requiredFlags = c.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-    });
-    check_vk_panic(c.vmaCreateImage(
-        core.gpuallocator,
+    };
+    checkVkPanic(c.vmaCreateImage(
+        self.gpuallocator,
         &img_info,
         &alloc_info,
         &new_image.image,
@@ -302,7 +313,7 @@ pub fn create(
     return new_image;
 }
 
-pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, miplevels: u32) c.VkImageView {
+pub fn createView(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, miplevels: u32) c.VkImageView {
     var image_view: c.VkImageView = undefined;
 
     var aspect_flags = c.VK_IMAGE_ASPECT_COLOR_BIT;
@@ -324,73 +335,73 @@ pub fn create_view(device: c.VkDevice, image: c.VkImage, format: c.VkFormat, mip
         },
     };
 
-    check_vk(c.vkCreateImageView(device, &view_info, null, &image_view)) catch @panic("failed to make image view");
+    checkVkPanic(c.vkCreateImageView(device, &view_info, null, &image_view)) catch @panic("failed to make image view");
     return image_view;
 }
 
-pub fn create_upload(
-    core: *Core,
-    data: *anyopaque,
-    size: c.VkExtent3D,
-    format: c.VkFormat,
-    usage: c.VkImageUsageFlags,
-    mipmapped: bool,
-) AllocatedImage(1) {
-    const data_size = size.width * size.height * size.depth * 4;
+// pub fn createUpload(
+//     self: *Self,
+//     data: *anyopaque,
+//     size: c.VkExtent3D,
+//     format: c.VkFormat,
+//     usage: c.VkImageUsageFlags,
+//     mipmapped: bool,
+// ) AllocatedImage {
+//     const data_size = size.width * size.height * size.depth * 4;
 
-    const staging = buffer.create(
-        core,
-        data_size,
-        c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        c.VMA_MEMORY_USAGE_CPU_TO_GPU,
-    );
-    defer c.vmaDestroyBuffer(core.gpuallocator, staging.buffer, staging.allocation);
+//     const staging = buffer.create(
+//         self,
+//         data_size,
+//         c.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+//         c.VMA_MEMORY_USAGE_CPU_TO_GPU,
+//     );
+//     defer c.vmaDestroyBuffer(self.gpuallocator, staging.buffer, staging.allocation);
 
-    const byte_data = @as([*]u8, @ptrCast(staging.info.pMappedData.?));
-    const byte_src = @as([*]u8, @ptrCast(data));
-    @memcpy(byte_data[0..data_size], byte_src[0..data_size]);
+//     const byte_data = @as([*]u8, @ptrCast(staging.info.pMappedData.?));
+//     const byte_src = @as([*]u8, @ptrCast(data));
+//     @memcpy(byte_data[0..data_size], byte_src[0..data_size]);
 
-    const new_image = create(
-        core,
-        size,
-        format,
-        usage | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        mipmapped,
-    );
-    AsyncContext.submitBegin(core);
-    const cmd = core.asynccontext.command_buffer;
-    transitionImage(
-        cmd,
-        new_image.image,
-        c.VK_IMAGE_LAYOUT_UNDEFINED,
-        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    );
-    const image_copy_region: c.VkBufferImageCopy = .{
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = .{
-            .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel = 0,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        },
-        .imageExtent = size,
-    };
-    c.vkCmdCopyBufferToImage(
-        cmd,
-        staging.buffer,
-        new_image.image,
-        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &image_copy_region,
-    );
-    transitionImage(
-        cmd,
-        new_image.image,
-        c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    );
-    AsyncContext.submitEnd(core);
-    return new_image;
-}
+//     const new_image = create(
+//         self,
+//         size,
+//         format,
+//         usage | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT | c.VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+//         mipmapped,
+//     );
+//     AsyncContext.submitBegin(self);
+//     const cmd = self.asynccontext.command_buffer;
+//     transitionImage(
+//         cmd,
+//         new_image.image,
+//         c.VK_IMAGE_LAYOUT_UNDEFINED,
+//         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+//     );
+//     const image_copy_region: c.VkBufferImageCopy = .{
+//         .bufferOffset = 0,
+//         .bufferRowLength = 0,
+//         .bufferImageHeight = 0,
+//         .imageSubresource = .{
+//             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
+//             .mipLevel = 0,
+//             .baseArrayLayer = 0,
+//             .layerCount = 1,
+//         },
+//         .imageExtent = size,
+//     };
+//     c.vkCmdCopyBufferToImage(
+//         cmd,
+//         staging.buffer,
+//         new_image.image,
+//         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+//         1,
+//         &image_copy_region,
+//     );
+//     transitionImage(
+//         cmd,
+//         new_image.image,
+//         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+//         c.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//     );
+//     AsyncContext.submitEnd(self);
+//     return new_image;
+// }

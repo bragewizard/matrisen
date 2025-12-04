@@ -3,9 +3,7 @@ const c = @import("../clibs/clibs.zig").libs;
 const debug = @import("debug.zig");
 const check_vk = debug.check_vk;
 const check_vk_panic = debug.check_vk_panic;
-const buffer = @import("buffer.zig");
 const linalg = @import("../linalg.zig");
-const image = @import("image.zig");
 const Core = @import("Core.zig");
 
 const Self = @This();
