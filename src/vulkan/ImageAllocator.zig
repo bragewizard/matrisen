@@ -119,9 +119,9 @@ pub fn createRenderImage(
     ));
     const resolved_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.resolvedattachment.image,
+        .image = renderimage.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = self.renderattachmentformat,
+        .format = format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
@@ -175,9 +175,9 @@ pub fn createDepthImage(
 
     const depth_image_view_ci: c.VkImageViewCreateInfo = .{
         .sType = c.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = self.depthstencilattachment.image,
+        .image = depthimage.image,
         .viewType = c.VK_IMAGE_VIEW_TYPE_2D,
-        .format = self.depth_format,
+        .format = format,
         .subresourceRange = .{
             .aspectMask = c.VK_IMAGE_ASPECT_DEPTH_BIT,
             .baseMipLevel = 0,
@@ -187,7 +187,7 @@ pub fn createDepthImage(
         },
     };
     checkVkPanic(c.vkCreateImageView(
-        self.device_handle,
+        self.device,
         &depth_image_view_ci,
         self.allocationcallbacks,
         &depthimage.view,
@@ -197,7 +197,7 @@ pub fn createDepthImage(
 
 pub fn deinitImage(self: *Self, image: AllocatedImage) void {
     c.vmaDestroyImage(self.gpuallocator, image.image, image.allocation);
-    c.vkDestroyImageView(self.device, image.view, self.allocationcallback);
+    c.vkDestroyImageView(self.device, image.view, self.allocationcallbacks);
 }
 
 // pub fn createDefaultTextures(self: *self) void {

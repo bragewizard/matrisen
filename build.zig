@@ -1,4 +1,5 @@
 const std = @import("std");
+const log = std.log.scoped(.build);
 const Build = std.Build;
 const builtin = @import("builtin");
 
@@ -63,7 +64,9 @@ pub fn build(b: *Build) !void {
 
 fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
     const shaders_dir = if (@hasDecl(@TypeOf(b.build_root.handle), "openIterableDir"))
-        b.build_root.handle.openIterableDir("src/vulkan/pipelines", .{}) catch @panic("Failed to open shaders directory")
+        b.build_root.handle.openIterableDir("src/vulkan/pipelines", .{}) catch {
+            @panic("Failed to open shaders directory");
+        }
     else
         b.build_root.handle.openDir(
             "src/vulkan/pipelines",
@@ -81,7 +84,7 @@ fn compile_all_shaders(b: *std.Build, exe: *std.Build.Step.Compile) void {
             }
             if (numperiod > 1) {
                 const basename = std.fs.path.basename(entry.name);
-                std.debug.print("found shader to compile: {s}\n", .{basename});
+                log.info("found shader to compile: {s}", .{basename});
                 add_shader(b, exe, basename);
             }
         }

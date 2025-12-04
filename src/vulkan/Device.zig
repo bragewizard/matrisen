@@ -115,7 +115,7 @@ pub fn init(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Self {
         @panic("");
     }
     vkCmdDrawMeshTasksEXT = procAddr;
-
+    log.info("created logical device", .{});
     return .{
         .handle = device,
         .graphics_queue = graphics_queue,

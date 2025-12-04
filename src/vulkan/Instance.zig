@@ -10,7 +10,7 @@ const Self = @This();
 handle: c.VkInstance = null,
 debug_messenger: c.VkDebugUtilsMessengerEXT = null,
 
-pub fn init(alloc: std.mem.Allocator) Self {
+pub fn init(alloc: std.mem.Allocator, allocationcallbacks: ?*c.VkAllocationCallbacks) Self {
     var sdl_required_extension_count: u32 = undefined;
     const sdl_extensions = c.SDL_Vulkan_GetInstanceExtensions(&sdl_required_extension_count);
     const sdl_extension_slice = sdl_extensions[0..sdl_required_extension_count];
@@ -21,7 +21,6 @@ pub fn init(alloc: std.mem.Allocator) Self {
     }
     var debug = true;
     const required_extensions = sdl_extension_slice;
-    const alloc_cb: ?*c.VkAllocationCallbacks = null;
     const debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT = null;
 
     // Get supported layers and extensions
@@ -41,7 +40,6 @@ pub fn init(alloc: std.mem.Allocator) Self {
     };
     checkVkPanic(c.vkEnumerateInstanceExtensionProperties(null, &extension_count, extension_props.ptr));
 
-    // Check if the validation layer is supported
     var layers = std.ArrayListUnmanaged([*c]const u8){};
     if (debug) {
         debug = blk: for (layer_props) |layer_prop| {
@@ -52,6 +50,7 @@ pub fn init(alloc: std.mem.Allocator) Self {
                     log.err("failed to append", .{});
                     @panic("");
                 };
+                log.info("Validation layers is supported", .{});
                 break :blk true;
             }
         } else false;
@@ -117,21 +116,23 @@ pub fn init(alloc: std.mem.Allocator) Self {
     };
 
     var instance: c.VkInstance = undefined;
-    checkVkPanic(c.vkCreateInstance(&instance_info, alloc_cb, &instance));
+    checkVkPanic(c.vkCreateInstance(&instance_info, allocationcallbacks, &instance));
     log.info("Created vulkan instance.", .{});
 
-    const debug_messenger = if (debug)
-        createDebugCallback(instance, debug_callback, alloc_cb)
-    else
-        null;
+    const debug_messenger = if (debug) blk: {
+        log.info("Created vulkan debug callback messenger.", .{});
+        break :blk createDebugCallback(instance, debug_callback, allocationcallbacks);
+    } else blk: {
+        break :blk null;
+    };
 
     return .{
-        instance,
-        debug_messenger,
+        .handle = instance,
+        .debug_messenger = debug_messenger,
     };
 }
 
-pub fn getDestroyDebugUtilsMessenger(self: Self) c.PFN_vkDestroyDebugUtilsMessengerEXT {
+pub fn getDestroyDebugUtilsMessenger(self: *Self) c.PFN_vkDestroyDebugUtilsMessengerEXT {
     return getVulkanInstanceFunct(
         c.PFN_vkDestroyDebugUtilsMessengerEXT,
         self.handle,
@@ -184,7 +185,7 @@ fn getVulkanInstanceFunct(comptime Fn: type, instance: c.VkInstance, name: [*c]c
 fn createDebugCallback(
     instance: c.VkInstance,
     debug_callback: c.PFN_vkDebugUtilsMessengerCallbackEXT,
-    alloc_cb: ?*c.VkAllocationCallbacks,
+    allocationcallbacks: ?*c.VkAllocationCallbacks,
 ) c.VkDebugUtilsMessengerEXT {
     const create_fn_opt = getVulkanInstanceFunct(
         c.PFN_vkCreateDebugUtilsMessengerEXT,
@@ -205,17 +206,17 @@ fn createDebugCallback(
             .pUserData = null,
         });
         var debug_messenger: c.VkDebugUtilsMessengerEXT = undefined;
-        checkVkPanic(create_fn(instance, &create_info, alloc_cb, &debug_messenger));
+        checkVkPanic(create_fn(instance, &create_info, allocationcallbacks, &debug_messenger));
         log.info("Created vulkan debug messenger.", .{});
         return debug_messenger;
     }
     return null;
 }
 
-pub fn deinit(self: *Self) void {
-    defer c.vkDestroyInstance(self.instance.handle, self.allocationcallbacks);
+pub fn deinit(self: *Self, allocationcallbacks: ?*c.VkAllocationCallbacks) void {
+    defer c.vkDestroyInstance(self.handle, allocationcallbacks);
     defer if (self.debug_messenger != null) {
         const destroyFn = getDestroyDebugUtilsMessenger(self).?;
-        destroyFn(self.instance.handle, self.instance.debug_messenger, self.allocationcallbacks);
+        destroyFn(self.handle, self.debug_messenger, allocationcallbacks);
     };
 }

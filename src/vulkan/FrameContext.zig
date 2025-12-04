@@ -2,12 +2,12 @@ const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
 const debug = @import("debug.zig");
 const log = std.log.scoped(.framecontext);
+const transitionImage = @import("Renderer.zig").transitionImage;
+const copyImageToImage = @import("Renderer.zig").copyImageToImage;
 const Core = @import("Core.zig");
 const Device = @import("Device.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
 const DescriptorAllocator = @import("DescriptorAllocator.zig");
-const transitionImage = @import("Renderer.zig").transitionImage;
-const copyImageToImage = @import("Renderer.zig").copyImageToImage;
 
 const Self = @This();
 
@@ -65,6 +65,7 @@ pub fn init(
         allocationcallbacks,
         &self.render_fence,
     ));
+    log.info("Created framecontext", .{});
 }
 
 pub fn deinit(self: *Self, device: Device, allocationcallbacks: ?*c.VkAllocationCallbacks) void {
@@ -88,8 +89,11 @@ pub fn submitBegin(self: *Self, core: *Core) !void {
     );
     if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
         core.resizerequest = true;
+        log.debug("resizing", .{});
         return error.SwapchainOutOfDate;
     }
+    // log.debug("image index {}", .{self.swapchain_image_index});
+    // log.debug("current frame {}", .{core.current_frame});
 
     debug.checkVkPanic(c.vkResetFences(core.device.handle, 1, &self.render_fence));
     debug.checkVkPanic(c.vkResetCommandBuffer(self.command_buffer, 0));

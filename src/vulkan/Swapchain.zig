@@ -33,25 +33,25 @@ pub const SupportInfo = struct {
     formats: []c.VkSurfaceFormatKHR = &.{},
     present_modes: []c.VkPresentModeKHR = &.{},
 
-    pub fn init(a: std.mem.Allocator, device: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) SupportInfo {
+    pub fn init(allocator: std.mem.Allocator, device: c.VkPhysicalDevice, surface: c.VkSurfaceKHR) SupportInfo {
         var capabilities: c.VkSurfaceCapabilitiesKHR = undefined;
-        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities));
+        debug.checkVkPanic(c.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities));
 
         var format_count: u32 = undefined;
-        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, null));
-        const formats = a.alloc(c.VkSurfaceFormatKHR, format_count) catch {
+        debug.checkVkPanic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, null));
+        const formats = allocator.alloc(c.VkSurfaceFormatKHR, format_count) catch {
             log.err("failed to alloc", .{});
             @panic("");
         };
-        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, formats.ptr));
+        debug.checkVkPanic(c.vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, formats.ptr));
 
         var present_mode_count: u32 = undefined;
-        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, null));
-        const present_modes = a.alloc(c.VkPresentModeKHR, present_mode_count) catch {
+        debug.checkVkPanic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, null));
+        const present_modes = allocator.alloc(c.VkPresentModeKHR, present_mode_count) catch {
             log.err("failed to alloc", .{});
             @panic("");
         };
-        debug.check_vk_panic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(
+        debug.checkVkPanic(c.vkGetPhysicalDeviceSurfacePresentModesKHR(
             device,
             surface,
             &present_mode_count,
@@ -64,9 +64,9 @@ pub const SupportInfo = struct {
             .present_modes = present_modes,
         };
     }
-    pub fn deinit(self: *const SupportInfo, a: std.mem.Allocator) void {
-        a.free(self.formats);
-        a.free(self.present_modes);
+    pub fn deinit(self: *const SupportInfo, allocator: std.mem.Allocator) void {
+        allocator.free(self.formats);
+        allocator.free(self.present_modes);
     }
 };
 
@@ -82,7 +82,7 @@ pub fn init(
     const vsync = true;
     const desired_format = .{ .format = c.VK_FORMAT_B8G8R8A8_SRGB, .colorSpace = c.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
 
-    const supportinfo: SupportInfo = .init(allocator, physicaldevice, surface);
+    const supportinfo: SupportInfo = .init(allocator, physicaldevice.handle, surface);
     defer supportinfo.deinit(allocator);
     var format = supportinfo.formats[0];
     for (supportinfo.formats) |f| {
@@ -155,7 +155,7 @@ pub fn init(
     }
 
     var swapchain: c.VkSwapchainKHR = undefined;
-    debug.check_vk_panic(c.vkCreateSwapchainKHR(
+    debug.checkVkPanic(c.vkCreateSwapchainKHR(
         device,
         &swapchain_info,
         allocationcallbacks,
@@ -165,13 +165,13 @@ pub fn init(
 
     // Try and fetch the images from the swpachain.
     var swapchain_image_count: u32 = undefined;
-    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, null));
+    debug.checkVkPanic(c.vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, null));
     const swapchain_images = allocator.alloc(c.VkImage, swapchain_image_count) catch {
         log.err("failed to alloc", .{});
         @panic("");
     };
     errdefer allocator.free(swapchain_images);
-    debug.check_vk_panic(c.vkGetSwapchainImagesKHR(
+    debug.checkVkPanic(c.vkGetSwapchainImagesKHR(
         device,
         swapchain,
         &swapchain_image_count,
@@ -190,11 +190,11 @@ pub fn init(
     }
 
     return .{
-        swapchain,
-        extent,
-        format.format,
-        swapchain_images,
-        swapchain_image_views,
+        .handle = swapchain,
+        .extent = extent,
+        .format = format.format,
+        .images = swapchain_images,
+        .views = swapchain_image_views,
     };
 }
 
@@ -267,6 +267,6 @@ fn createImageViews(device: c.VkDevice, img: c.VkImage, format: c.VkFormat) c.Vk
     });
 
     var image_view: c.VkImageView = undefined;
-    debug.check_vk_panic(c.vkCreateImageView(device, &view_info, null, &image_view));
+    debug.checkVkPanic(c.vkCreateImageView(device, &view_info, null, &image_view));
     return image_view;
 }

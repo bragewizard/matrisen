@@ -1,6 +1,6 @@
 const std = @import("std");
 const m = @import("matrisen");
-const log = std.log.scoped(.app);
+const log = std.log.scoped(.main);
 const Core = m.Core;
 const Quat = m.linalg.Quat(f32);
 const Vec3 = m.linalg.Vec3(f32);
@@ -106,7 +106,6 @@ const App = @This();
 pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
     var timer = std.time.Timer.start() catch @panic("Failed to start timer");
     var delta: u64 = undefined;
-    std.debug.print("created engine\n", .{});
     // var camerarot: Quat = .identity;
     // var camerapos: Vec3 = .{ .x = 0, .y = -5, .z = 8 };
     // camerarot.rotatePitch(std.math.degreesToRadians(60));
@@ -116,7 +115,6 @@ pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
     m.Window.checkSdl(m.clibs.SDL_SetWindowRelativeMouseMode(window.handle, false));
     window.state.capture_mouse = true;
     _ = self;
-    std.debug.print("starting", .{});
     // self.initScene(engine);
 
     while (!window.state.quit) {

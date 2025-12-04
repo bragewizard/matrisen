@@ -31,7 +31,6 @@ pub fn init(device: Device, physicaldevice: PhysicalDevice, allocationcallbacks:
         allocationcallbacks,
         &fence,
     ));
-    log.info("Created sync structures", .{});
 
     debug.checkVkPanic(c.vkCreateCommandPool(
         device.handle,
@@ -51,6 +50,7 @@ pub fn init(device: Device, physicaldevice: PhysicalDevice, allocationcallbacks:
         &upload_commandbuffer_ai,
         &commandbuffer,
     ));
+    log.info("Created asynccontext", .{});
     return .{
         .fence = fence,
         .commandpool = commandpool,

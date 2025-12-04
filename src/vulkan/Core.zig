@@ -5,6 +5,7 @@
 //! see the LICENSE file or <https://www.gnu.org/licenses/> for more details
 
 const std = @import("std");
+const log = std.log.scoped(.core);
 const debug = @import("debug.zig");
 const c = @import("../clibs/clibs.zig").libs;
 
@@ -77,8 +78,10 @@ pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     defer arenaallocator.deinit();
     const initallocator = arenaallocator.allocator();
 
-    const instance: Instance = .init(initallocator);
+    var allocationcallbacks_struct: c.VkAllocationCallbacks = debug.allocationcallbacks();
+    _ = &allocationcallbacks_struct;
     const allocationcallbacks: ?*c.VkAllocationCallbacks = null;
+    const instance: Instance = .init(initallocator, allocationcallbacks);
     const surface = window.createSurface(instance, allocationcallbacks);
     const physicaldevice: PhysicalDevice = .select(initallocator, instance.handle, surface);
     const device: Device = .init(initallocator, physicaldevice);
@@ -130,7 +133,7 @@ pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
 
 pub fn deinit(self: *Self) void {
     debug.checkVkPanic(c.vkDeviceWaitIdle(self.device.handle));
-    defer self.instance.deinit();
+    defer self.instance.deinit(self.allocationcallbacks);
     defer c.vkDestroySurfaceKHR(self.instance.handle, self.surface, self.allocationcallbacks);
     defer c.vkDestroyDevice(self.device.handle, self.allocationcallbacks);
     defer c.vmaDestroyAllocator(self.gpuallocator);
@@ -159,6 +162,7 @@ fn makeGpuAllocator(
         .flags = c.VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
     };
     debug.checkVkPanic(c.vmaCreateAllocator(&allocator_ci, &gpuallocator));
+    log.info("created gpu memory allocator", .{});
     return gpuallocator;
 }
 
@@ -181,6 +185,14 @@ pub fn resize(self: *Self, window: *Window) void {
     ))) * render_scale);
     self.drawextent2d = drawextent;
     self.drawextent3d = .{ .width = drawextent.width, .height = drawextent.height, .depth = 1 };
+    self.swapchain = .init(
+        self.cpuallocator,
+        self.physicaldevice,
+        self.device.handle,
+        self.surface,
+        self.swapchainextent,
+        self.allocationcallbacks,
+    );
     self.drawimage = self.imageallocator.createDrawImage(self.drawextent2d, renderformat);
     self.renderimage = self.imageallocator.createRenderImage(self.drawextent2d, renderformat);
     self.depthimage = self.imageallocator.createDepthImage(self.drawextent3d, depthformat);

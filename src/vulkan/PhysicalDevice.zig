@@ -1,8 +1,7 @@
 const c = @import("../clibs/clibs.zig").libs;
 const std = @import("std");
-const check_vk = @import("debug.zig").check_vk;
-const check_vk_panic = @import("debug.zig").check_vk_panic;
-const log = std.log.scoped(.device);
+const log = std.log.scoped(.physicaldevice);
+const checkVkPanic = @import("debug.zig").checkVkPanic;
 const config = @import("config");
 const api_version = @import("Instance.zig").api_version;
 const required_device_extensions: []const [*c]const u8 = &.{ "VK_KHR_swapchain", "VK_EXT_mesh_shader" };
@@ -30,13 +29,13 @@ transfer_queue_family: u32 = undefined,
 pub fn select(alloc: std.mem.Allocator, instance: c.VkInstance, surface: c.VkSurfaceKHR) Self {
     const criteria = PhysicalDeviceSelectionCriteria.PreferDiscrete;
     var physical_device_count: u32 = undefined;
-    check_vk_panic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, null));
+    checkVkPanic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, null));
 
     const physical_devices = alloc.alloc(c.VkPhysicalDevice, physical_device_count) catch {
         log.err("failed to alloc", .{});
         @panic("");
     };
-    check_vk_panic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.ptr));
+    checkVkPanic(c.vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.ptr));
 
     var suitable_pd: ?Self = null;
 
@@ -112,7 +111,7 @@ fn makePhysicalDevice(
         if (surface) |surf| {
             if (present_queue_family == INVALID_QUEUE_FAMILY_INDEX) {
                 var present_support: c.VkBool32 = undefined;
-                check_vk_panic(c.vkGetPhysicalDeviceSurfaceSupportKHR(device, index, surf, &present_support));
+                checkVkPanic(c.vkGetPhysicalDeviceSurfaceSupportKHR(device, index, surf, &present_support));
                 if (present_support == c.VK_TRUE) {
                     present_queue_family = index;
                 }
@@ -141,12 +140,12 @@ fn makePhysicalDevice(
     }
 
     return .{
-        device,
-        props,
-        graphics_queue_family,
-        present_queue_family,
-        compute_queue_family,
-        transfer_queue_family,
+        .handle = device,
+        .properties = props,
+        .graphics_queue_family = graphics_queue_family,
+        .present_queue_family = present_queue_family,
+        .compute_queue_family = compute_queue_family,
+        .transfer_queue_family = transfer_queue_family,
     };
 }
 
@@ -177,12 +176,12 @@ fn isPhysicalDeviceSuitable(
 
     if (required_device_extensions.len > 0) {
         var device_extension_count: u32 = undefined;
-        check_vk_panic(c.vkEnumerateDeviceExtensionProperties(device.handle, null, &device_extension_count, null));
+        checkVkPanic(c.vkEnumerateDeviceExtensionProperties(device.handle, null, &device_extension_count, null));
         const device_extensions = alloc.alloc(c.VkExtensionProperties, device_extension_count) catch {
             log.err("failed to alloc", .{});
             @panic("");
         };
-        check_vk_panic(c.vkEnumerateDeviceExtensionProperties(
+        checkVkPanic(c.vkEnumerateDeviceExtensionProperties(
             device.handle,
             null,
             &device_extension_count,

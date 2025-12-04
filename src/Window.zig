@@ -1,5 +1,6 @@
 const c = @import("clibs/clibs.zig").libs;
 const std = @import("std");
+const log = std.log.scoped(.window);
 const Core = @import("vulkan/Core.zig");
 const Instance = @import("vulkan/Instance.zig");
 
@@ -35,6 +36,7 @@ pub fn createSurface(
         allocationcallbacks,
         &surface,
     ));
+    log.info("created surface", .{});
     return surface;
 }
 
