@@ -7,27 +7,26 @@ pub const PoolSizeRatio = struct {
     type: c.VkDescriptorType,
 };
 
-ready_pools: std.ArrayList(c.VkDescriptorPool) = undefined,
-full_pools: std.ArrayList(c.VkDescriptorPool) = undefined,
-ratios: std.ArrayList(PoolSizeRatio) = undefined,
+const Self = @This();
+
+ready_pools: std.ArrayList(c.VkDescriptorPool) = .empty,
+full_pools: std.ArrayList(c.VkDescriptorPool) = .empty,
+ratios: std.ArrayList(PoolSizeRatio) = .empty,
 sets_per_pool: u32 = 0,
 
 pub fn init(
-    self: *@This(),
     device: c.VkDevice,
     initial_sets: u32,
     pool_ratios: []PoolSizeRatio,
     alloc: std.mem.Allocator,
-) void {
-    self.ratios = .empty;
+) Self {
+    var self: Self = .{};
     self.ratios.clearAndFree(alloc);
-    self.ready_pools = .empty;
-    self.full_pools = .empty;
-
     self.ratios.appendSlice(alloc, pool_ratios) catch @panic("Failed to append to ratios");
     const new_pool = create_pool(device, initial_sets, pool_ratios, std.heap.page_allocator);
     self.sets_per_pool = @intFromFloat(@as(f32, @floatFromInt(initial_sets)) * 1.5);
     self.ready_pools.append(alloc, new_pool) catch @panic("Failed to append to ready_pools");
+    return self;
 }
 
 pub fn deinit(self: *@This(), device: c.VkDevice, a: std.mem.Allocator) void {
@@ -81,9 +80,7 @@ pub fn allocate(
         self.full_pools.append(a, pool_to_use) catch @panic("Failed to append to full_pools");
         pool_to_use = self.get_pool(device);
         info.descriptorPool = pool_to_use;
-        debug.check_vk(c.vkAllocateDescriptorSets(device, &info, &descriptor_set)) catch {
-            @panic("Failed to allocate descriptor set");
-        };
+        debug.checkVkPanic(c.vkAllocateDescriptorSets(device, &info, &descriptor_set));
     }
     self.ready_pools.append(a, pool_to_use) catch @panic("Failed to append to full_pools");
     return descriptor_set;
@@ -128,8 +125,6 @@ fn create_pool(
     };
 
     var pool: c.VkDescriptorPool = undefined;
-    debug.check_vk(c.vkCreateDescriptorPool(device, &info, null, &pool)) catch {
-        @panic("Failed to create descriptor pool");
-    };
+    debug.checkVkPanic(c.vkCreateDescriptorPool(device, &info, null, &pool));
     return pool;
 }

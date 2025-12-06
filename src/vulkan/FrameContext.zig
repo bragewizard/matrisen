@@ -11,12 +11,11 @@ const DescriptorAllocator = @import("DescriptorAllocator.zig");
 
 const Self = @This();
 
-swapchain_semaphore: c.VkSemaphore = null,
-render_semaphore: c.VkSemaphore = null,
-render_fence: c.VkFence = null,
+acquiresemaphore: c.VkSemaphore = null,
+renderfence: c.VkFence = null,
 command_pool: c.VkCommandPool = null,
 command_buffer: c.VkCommandBuffer = null,
-swapchain_image_index: u32 = 0,
+swapchainindex: u32 = 0,
 descriptorallocator: DescriptorAllocator = .{},
 dynamicset: c.VkDescriptorSet = undefined,
 
@@ -26,9 +25,7 @@ pub fn init(
     physicaldevice: PhysicalDevice,
     allocationcallbacks: ?*c.VkAllocationCallbacks,
 ) void {
-    const semaphore_ci = c.VkSemaphoreCreateInfo{
-        .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-    };
+    const semaphore_ci = c.VkSemaphoreCreateInfo{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 
     const fence_ci = c.VkFenceCreateInfo{
         .sType = c.VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -51,51 +48,40 @@ pub fn init(
         device.handle,
         &semaphore_ci,
         allocationcallbacks,
-        &self.swapchain_semaphore,
-    ));
-    debug.checkVkPanic(c.vkCreateSemaphore(
-        device.handle,
-        &semaphore_ci,
-        allocationcallbacks,
-        &self.render_semaphore,
+        &self.acquiresemaphore,
     ));
     debug.checkVkPanic(c.vkCreateFence(
         device.handle,
         &fence_ci,
         allocationcallbacks,
-        &self.render_fence,
+        &self.renderfence,
     ));
+
     log.info("Created framecontext", .{});
 }
 
 pub fn deinit(self: *Self, device: Device, allocationcallbacks: ?*c.VkAllocationCallbacks) void {
     c.vkDestroyCommandPool(device.handle, self.command_pool, allocationcallbacks);
-    c.vkDestroyFence(device.handle, self.render_fence, allocationcallbacks);
-    c.vkDestroySemaphore(device.handle, self.render_semaphore, allocationcallbacks);
-    c.vkDestroySemaphore(device.handle, self.swapchain_semaphore, allocationcallbacks);
+    c.vkDestroyFence(device.handle, self.renderfence, allocationcallbacks);
+    c.vkDestroySemaphore(device.handle, self.acquiresemaphore, allocationcallbacks);
 }
 
 pub fn submitBegin(self: *Self, core: *Core) !void {
     const timeout: u64 = 4_000_000_000; // 4 second in nanonesconds
-    debug.checkVkPanic(c.vkWaitForFences(core.device.handle, 1, &self.render_fence, c.VK_TRUE, timeout));
-
+    debug.checkVkPanic(c.vkWaitForFences(core.device.handle, 1, &self.renderfence, c.VK_TRUE, timeout));
     const e = c.vkAcquireNextImageKHR(
         core.device.handle,
         core.swapchain.handle,
         timeout,
-        self.swapchain_semaphore,
+        self.acquiresemaphore,
         null,
-        &self.swapchain_image_index,
+        &self.swapchainindex,
     );
     if (e == c.VK_ERROR_OUT_OF_DATE_KHR) {
-        core.resizerequest = true;
-        log.debug("resizing", .{});
         return error.SwapchainOutOfDate;
     }
-    // log.debug("image index {}", .{self.swapchain_image_index});
-    // log.debug("current frame {}", .{core.current_frame});
 
-    debug.checkVkPanic(c.vkResetFences(core.device.handle, 1, &self.render_fence));
+    debug.checkVkPanic(c.vkResetFences(core.device.handle, 1, &self.renderfence));
     debug.checkVkPanic(c.vkResetCommandBuffer(self.command_buffer, 0));
 
     const cmd = self.command_buffer;
@@ -176,20 +162,20 @@ pub fn submitEnd(self: *Self, core: *Core) void {
     );
     transitionImage(
         cmd,
-        core.swapchain.images[self.swapchain_image_index],
+        core.swapchain.images[self.swapchainindex],
         c.VK_IMAGE_LAYOUT_UNDEFINED,
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     );
     copyImageToImage(
         cmd,
         core.renderimage.image,
-        core.swapchain.images[self.swapchain_image_index],
+        core.swapchain.images[self.swapchainindex],
         core.drawextent2d,
-        core.swapchainextent,
+        core.swapchain.extent,
     );
     transitionImage(
         cmd,
-        core.swapchain.images[self.swapchain_image_index],
+        core.swapchain.images[self.swapchainindex],
         c.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         c.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     );
@@ -203,13 +189,13 @@ pub fn submitEnd(self: *Self, core: *Core) void {
 
     const wait_info = c.VkSemaphoreSubmitInfo{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = self.swapchain_semaphore,
+        .semaphore = self.acquiresemaphore,
         .stageMask = c.VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
     };
 
     const signal_info = c.VkSemaphoreSubmitInfo{
         .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = self.render_semaphore,
+        .semaphore = core.swapchain.semaphores[self.swapchainindex],
         .stageMask = c.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
     };
 
@@ -223,19 +209,17 @@ pub fn submitEnd(self: *Self, core: *Core) void {
         .pSignalSemaphoreInfos = &signal_info,
     };
 
-    debug.checkVkPanic(c.vkQueueSubmit2(core.device.graphics_queue, 1, &submit, self.render_fence));
+    debug.checkVkPanic(c.vkQueueSubmit2(core.device.graphics_queue, 1, &submit, self.renderfence));
 
     const present_info = c.VkPresentInfoKHR{
         .sType = c.VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &self.render_semaphore,
+        .pWaitSemaphores = &core.swapchain.semaphores[self.swapchainindex],
         .swapchainCount = 1,
         .pSwapchains = &core.swapchain.handle,
-        .pImageIndices = &self.swapchain_image_index,
+        .pImageIndices = &self.swapchainindex,
     };
     _ = c.vkQueuePresentKHR(core.device.graphics_queue, &present_info);
-    core.framenumber +%= 1;
-    core.switch_frame();
 }
 
 pub fn graphics_cmd_pool_info(queue_family_index: u32) c.VkCommandPoolCreateInfo {

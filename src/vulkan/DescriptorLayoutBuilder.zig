@@ -14,9 +14,9 @@ pub fn deinit(self: *Self, gpa: std.mem.Allocator) void {
     self.bindings.deinit(gpa);
 }
 
-pub fn add_binding(
+pub fn addBinding(
     self: *Self,
-    a: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     binding: u32,
     descriptor_type: c.VkDescriptorType,
 ) void {
@@ -25,7 +25,7 @@ pub fn add_binding(
         .descriptorType = descriptor_type,
         .descriptorCount = 1,
     };
-    self.bindings.append(a, new_binding) catch @panic("Failed to append to bindings");
+    self.bindings.append(allocator, new_binding) catch @panic("Failed to append to bindings");
 }
 
 pub fn clear(self: *Self) void {
@@ -51,8 +51,6 @@ pub fn build(
         .pNext = pnext,
     };
     var layout: c.VkDescriptorSetLayout = undefined;
-    debug.check_vk(c.vkCreateDescriptorSetLayout(device, &info, null, &layout)) catch {
-        @panic("Failed to create descriptor set layout");
-    };
+    debug.checkVkPanic(c.vkCreateDescriptorSetLayout(device, &info, null, &layout));
     return layout;
 }

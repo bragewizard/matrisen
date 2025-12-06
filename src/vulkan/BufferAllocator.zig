@@ -8,16 +8,38 @@ const Vec3 = linalg.Vec3(f32);
 const Vec4 = linalg.Vec4(f32);
 const Mat4x4 = linalg.Mat4x4(f32);
 
+const Self = @This();
+
+device: c.VkDevice,
+gpuallocator: c.VmaAllocator,
+allocationcallbacks: ?*c.VkAllocationCallbacks,
+
 pub const AllocatedBuffer = struct {
     buffer: c.VkBuffer,
     allocation: c.VmaAllocation,
     info: c.VmaAllocationInfo,
 };
 
-pub fn createIndirect(core: *Core, command_count: u32) AllocatedBuffer {
+pub fn init(device: c.VkDevice, gpuallocator: c.VmaAllocator, allocationcallbacks: ?*c.VkAllocationCallbacks) Self {
+    return .{
+        .device = device,
+        .allocationcallbacks = allocationcallbacks,
+        .gpuallocator = gpuallocator,
+    };
+}
+
+pub fn flush(self: *Self, buffer: AllocatedBuffer, offset: c.VkDeviceSize, size: c.VkDeviceSize) void {
+    debug.checkVkPanic(c.vmaFlushAllocation(self.gpuallocator, buffer.allocation, offset, size));
+}
+
+pub fn destroy(self: *Self, buffer: AllocatedBuffer) void {
+    c.vmaDestroyBuffer(self.gpuallocator, buffer.buffer, buffer.allocation);
+}
+
+pub fn createIndirect(self: *Self, command_count: u32) AllocatedBuffer {
     const indirect_buffer = create(
-        core,
-        @sizeOf(c.VkDrawIndexedIndirectCommand) * command_count, // COMMAND_COUNT is how many draw calls
+        self,
+        @sizeOf(c.VkDrawIndexedIndirectCommand) * command_count,
         c.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | c.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         c.VMA_MEMORY_USAGE_CPU_ONLY,
     );
@@ -25,7 +47,7 @@ pub fn createIndirect(core: *Core, command_count: u32) AllocatedBuffer {
 }
 
 pub fn create(
-    core: *Core,
+    self: *Self,
     alloc_size: usize,
     usage: c.VkBufferUsageFlags,
     memory_usage: c.VmaMemoryUsage,
@@ -42,14 +64,14 @@ pub fn create(
     };
 
     var new_buffer: AllocatedBuffer = undefined;
-    debug.check_vk(c.vmaCreateBuffer(
-        core.gpuallocator,
+    debug.checkVkPanic(c.vmaCreateBuffer(
+        self.gpuallocator,
         &buffer_info,
         &vma_alloc_info,
         &new_buffer.buffer,
         &new_buffer.allocation,
         &new_buffer.info,
-    )) catch @panic("Failed to create buffer");
+    ));
     return new_buffer;
 }
 
@@ -116,16 +138,16 @@ pub fn createSSBO(core: *Core, size: c.VkDeviceSize, device_address: bool) Alloc
     return ssbo_buffer;
 }
 
-pub fn getDeviceAddress(core: *Core, buffer: AllocatedBuffer) c.VkDeviceAddress {
-    const device_address_info = c.VkBufferDeviceAddressInfo{
+pub fn getBufferAddress(self: *Self, buffer: AllocatedBuffer) c.VkDeviceAddress {
+    const deviceaddressinfo = c.VkBufferDeviceAddressInfo{
         .sType = c.VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
         .pNext = null, // Always initialize pNext
         .buffer = buffer.buffer,
     };
-    const adr = c.vkGetBufferDeviceAddress(core.device.handle, &device_address_info);
+    const adr = c.vkGetBufferDeviceAddress(self.device, &deviceaddressinfo);
     if (adr == 0) {
         std.log.err("Failed to get buffer device address for SSBO. Is the feature enabled?", .{});
-        c.vmaDestroyBuffer(core.gpuallocator, buffer.buffer, buffer.allocation);
+        c.vmaDestroyBuffer(self.gpuallocator, buffer.buffer, buffer.allocation);
         @panic("");
     }
     return adr;

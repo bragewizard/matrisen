@@ -14,8 +14,6 @@ const PhysicalDevice = @import("PhysicalDevice.zig");
 const Swapchain = @import("Swapchain.zig");
 const DescriptorLayoutBuilder = @import("DescriptorLayoutBuilder.zig");
 const Instance = @import("Instance.zig");
-const DescriptorAllocator = @import("DescriptorAllocator.zig");
-const DescriptorWriter = @import("DescriptorWriter.zig");
 const FrameContext = @import("FrameContext.zig");
 const AsyncContext = @import("AsyncContext.zig");
 const Window = @import("../Window.zig");
@@ -24,49 +22,41 @@ const ImageManager = @import("ImageManager.zig");
 const BufferAllocator = @import("BufferAllocator.zig");
 const BufferManager = @import("BufferManager.zig");
 const PipelineManager = @import("PipelineManager.zig");
+const DescriptorManager = @import("DescriptorManager.zig");
 
 const Self = @This();
 
 /// Bookkeeping
 pub const multibuffering = 2;
-const renderformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT;
-const depthformat: c.VkFormat = c.VK_FORMAT_D32_SFLOAT;
+pub const renderscale = 1.0;
+pub const renderformat: c.VkFormat = c.VK_FORMAT_R16G16B16A16_SFLOAT;
+pub const depthformat: c.VkFormat = c.VK_FORMAT_D32_SFLOAT;
 
-resizerequest: bool = false,
 framenumber: u64 = 0,
-current_frame: u8 = 0,
+currentframe: u8 = 0,
 
 /// Memory allocators
 cpuallocator: std.mem.Allocator,
 gpuallocator: c.VmaAllocator,
 
 /// Managers
+imageallocator: ImageAllocator,
+bufferallocator: BufferAllocator,
 framecontexts: [multibuffering]FrameContext,
-asynccontext: AsyncContext, // manages sync and command independet of frame
-// imagemanager: ImageManager = .{}, // manages image resources linked to app (not screen, except maybe postprocesing)
-// buffermanager: BufferManager = .{}, // manages buffer resources
-// pipelinemanager: PipelineManager = .{},
+asynccontext: AsyncContext,
+pipelinemanager: PipelineManager,
+descriptormanager: DescriptorManager,
+buffermanager: BufferManager,
+// imagemanager: ImageManager = .{},
 
-/// Vulkan essentials
 instance: Instance,
 device: Device,
 physicaldevice: PhysicalDevice,
 allocationcallbacks: ?*c.VkAllocationCallbacks,
 
-/// Layouts
-// pipelinelayout: c.VkPipelineLayout,
-// staticlayout: c.VkDescriptorSetLayout,
-// dynamiclayout: c.VkDescriptorSetLayout,
-imageallocator: ImageAllocator,
-// bufferallocator: BufferAllocator,
-/// Global static set
-// staticset: c.VkDescriptorSet,
-// globaldescriptorallocator: DescriptorAllocator,
-
 /// Screen resources
 surface: c.VkSurfaceKHR,
 swapchain: Swapchain,
-swapchainextent: c.VkExtent2D,
 drawextent3d: c.VkExtent3D, // for resolution scaling
 drawextent2d: c.VkExtent2D, //for resolution scaling
 drawimage: ImageAllocator.AllocatedImage = undefined,
@@ -87,27 +77,34 @@ pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
     const device: Device = .init(initallocator, physicaldevice);
     const gpuallocator = makeGpuAllocator(physicaldevice.handle, device.handle, instance.handle);
 
-    var swapchainextent: c.VkExtent2D = .{ .width = 0, .height = 0 };
-    window.getSize(&swapchainextent.width, &swapchainextent.height);
-    const drawextent: c.VkExtent2D = .{ .width = swapchainextent.width, .height = swapchainextent.height };
-    const depthextent: c.VkExtent3D = .{ .width = swapchainextent.width, .height = swapchainextent.height, .depth = 1 };
+    var windowextent: c.VkExtent2D = .{ .width = 0, .height = 0 };
+    window.getSize(&windowextent.width, &windowextent.height);
     const swapchain: Swapchain = .init(
         allocator,
         physicaldevice,
         device.handle,
         surface,
-        swapchainextent,
+        windowextent,
         allocationcallbacks,
     );
+    const drawextent2d = setRenderScale(swapchain.extent, renderscale);
+    const drawextent3d: c.VkExtent3D = .{ .width = drawextent2d.width, .height = drawextent2d.height, .depth = 1 };
     var imageallocator: ImageAllocator = .init(device.handle, gpuallocator, allocationcallbacks);
-    const drawimage = imageallocator.createDrawImage(drawextent, renderformat);
-    const renderimage = imageallocator.createRenderImage(drawextent, renderformat);
-    const depthimage = imageallocator.createDepthImage(depthextent, depthformat);
+    const drawimage = imageallocator.createDrawImage(drawextent2d, renderformat);
+    const renderimage = imageallocator.createRenderImage(drawextent2d, renderformat);
+    const depthimage = imageallocator.createDepthImage(drawextent3d, depthformat);
+    const pipelinemanager: PipelineManager = .init(allocator, device.handle, allocationcallbacks);
+
     var framecontexts: [multibuffering]FrameContext = @splat(.{});
     for (&framecontexts) |*framecontext| framecontext.init(device, physicaldevice, allocationcallbacks);
-    const asynccontext: AsyncContext = .init(device, physicaldevice, allocationcallbacks);
 
-    // const bufferallocator: BufferAllocator = .init();
+    const asynccontext: AsyncContext = .init(device, physicaldevice, allocationcallbacks);
+    var bufferallocator: BufferAllocator = .init(device.handle, gpuallocator, allocationcallbacks);
+    var buffermanager: BufferManager = .init();
+    var descriptormanager: DescriptorManager = .init(allocator, device, pipelinemanager);
+
+    // buffermanager.initDummy(&bufferallocator, &descriptormanager);
+    buffermanager.initTest(&bufferallocator, &descriptormanager) catch @panic("failed to create test buffers");
 
     return .{
         .cpuallocator = allocator,
@@ -122,12 +119,14 @@ pub fn init(allocator: std.mem.Allocator, window: *Window) Self {
         .physicaldevice = physicaldevice,
         .drawimage = drawimage,
         .renderimage = renderimage,
-        .drawextent2d = drawextent,
-        .drawextent3d = depthextent,
-        .swapchainextent = swapchainextent,
+        .drawextent2d = drawextent2d,
+        .drawextent3d = drawextent3d,
         .depthimage = depthimage,
         .imageallocator = imageallocator,
-        // .bufferallocator = bufferallocator,
+        .bufferallocator = bufferallocator,
+        .pipelinemanager = pipelinemanager,
+        .descriptormanager = descriptormanager,
+        .buffermanager = buffermanager,
     };
 }
 
@@ -143,10 +142,13 @@ pub fn deinit(self: *Self) void {
     defer self.imageallocator.deinitImage(self.depthimage);
     defer for (&self.framecontexts) |*frame| frame.deinit(self.device, self.allocationcallbacks);
     defer self.asynccontext.deinit(self.device, self.allocationcallbacks);
+    defer self.pipelinemanager.deinit(self.device.handle, self.allocationcallbacks);
+    defer self.descriptormanager.deinit(self.cpuallocator, self.device);
+    defer self.buffermanager.destroyBuffers(&self.bufferallocator);
 }
 
 pub fn switch_frame(self: *Self) void {
-    self.current_frame = (self.current_frame + 1) % multibuffering;
+    self.currentframe = (self.currentframe + 1) % multibuffering;
 }
 
 fn makeGpuAllocator(
@@ -172,28 +174,134 @@ pub fn resize(self: *Self, window: *Window) void {
     self.imageallocator.deinitImage(self.drawimage);
     self.imageallocator.deinitImage(self.renderimage);
     self.imageallocator.deinitImage(self.depthimage);
-    window.getSize(&self.swapchainextent.width, &self.swapchainextent.height);
-    var drawextent: c.VkExtent2D = .{};
-    const render_scale = 1;
-    drawextent.width = @intFromFloat(@as(f32, @floatFromInt(@min(
-        self.swapchainextent.width,
-        self.swapchainextent.width,
-    ))) * render_scale);
-    drawextent.height = @intFromFloat(@as(f32, @floatFromInt(@min(
-        self.swapchainextent.height,
-        self.swapchainextent.height,
-    ))) * render_scale);
-    self.drawextent2d = drawextent;
-    self.drawextent3d = .{ .width = drawextent.width, .height = drawextent.height, .depth = 1 };
+    var windowextent: c.VkExtent2D = .{};
+    window.getSize(&windowextent.width, &windowextent.height);
     self.swapchain = .init(
         self.cpuallocator,
         self.physicaldevice,
         self.device.handle,
         self.surface,
-        self.swapchainextent,
+        windowextent,
         self.allocationcallbacks,
     );
+    self.drawextent2d = setRenderScale(self.swapchain.extent, renderscale);
+    self.drawextent3d = .{ .width = self.drawextent2d.width, .height = self.drawextent2d.height, .depth = 1 };
     self.drawimage = self.imageallocator.createDrawImage(self.drawextent2d, renderformat);
     self.renderimage = self.imageallocator.createRenderImage(self.drawextent2d, renderformat);
     self.depthimage = self.imageallocator.createDepthImage(self.drawextent3d, depthformat);
+}
+
+fn setRenderScale(inputextent: c.VkExtent2D, scale: f32) c.VkExtent2D {
+    var outextent: c.VkExtent2D = .{};
+    outextent.width = @intFromFloat(@as(f32, @floatFromInt(@min(
+        inputextent.width,
+        inputextent.width,
+    ))) * scale);
+    outextent.height = @intFromFloat(@as(f32, @floatFromInt(@min(
+        inputextent.height,
+        inputextent.height,
+    ))) * scale);
+    return outextent;
+}
+
+// pub fn nextFrame(self: *Self, window: *Window) void {
+//     var frame = self.framecontexts[self.currentframe];
+//     frame.submitBegin(self) catch |err| {
+//         if (err == error.SwapchainOutOfDate or window.state.resizerequest) {
+//             self.resize(window);
+//             window.state.resizerequest = false;
+//             return;
+//         }
+//     };
+//     const cmd = frame.command_buffer;
+//     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipelinemanager.defaultpipeline);
+//     c.vkCmdBindDescriptorSets(
+//         cmd,
+//         c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+//         self.pipelinemanager.pipelinelayout,
+//         0,
+//         1,
+//         &self.descriptormanager.dynamicsets[self.currentframe],
+//         0,
+//         null,
+//     );
+//     c.vkCmdBindDescriptorSets(
+//         cmd,
+//         c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+//         self.pipelinemanager.pipelinelayout,
+//         1,
+//         1,
+//         &self.descriptormanager.staticset,
+//         0,
+//         null,
+//     );
+//     // c.vkCmdBindIndexBuffer(cmd, index.buffer, 0, c.VK_INDEX_TYPE_UINT32);
+//     // c.vkCmdDrawIndexedIndirect(cmd, indirect.buffer, 0, 1, @sizeOf(c.VkDrawIndexedIndirectCommand));
+//     c.vkCmdDraw(cmd, 3, 1, 0, 0);
+//     frame.submitEnd(self);
+//     self.framenumber +%= 1;
+//     self.switch_frame();
+// }
+
+pub fn nextFrame(self: *Self, window: *Window) void {
+    // 1. Handle Window State
+    var frame = self.framecontexts[self.currentframe];
+    frame.submitBegin(self) catch |err| {
+        if (err == error.SwapchainOutOfDate or window.state.resizerequest) {
+            self.resize(window);
+            window.state.resizerequest = false;
+            return;
+        }
+    };
+    // 2. CPU UPDATES (Animation & Camera)
+    // Rotate the cubes based on time
+    self.buffermanager.rotateDummy(self.currentframe, self.framenumber);
+    // Update Camera (Crucial! Otherwise you are inside the cube looking at nothing)
+    // We assume you added updateScene to BufferManager from the previous step.
+    const aspect = @as(f32, @floatFromInt(self.drawextent2d.width)) /
+        @as(f32, @floatFromInt(self.drawextent2d.height));
+    self.buffermanager.updateScene(self.currentframe, aspect);
+
+    // 3. RECORD COMMANDS
+    const cmd = frame.command_buffer;
+    c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipelinemanager.defaultpipeline);
+
+    // B. Bind Set 0 (Dynamic: Scene Data)
+    // We bind the specific dynamic set for THIS frame-in-flight
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        self.pipelinemanager.pipelinelayout,
+        0,
+        1,
+        &self.descriptormanager.dynamicsets[self.currentframe],
+        0,
+        null,
+    );
+    // C. Bind Set 1 (Static: Bindless Tables)
+    // This set contains the MeshTable and InstanceTable
+    c.vkCmdBindDescriptorSets(
+        cmd,
+        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
+        self.pipelinemanager.pipelinelayout,
+        1,
+        1,
+        &self.descriptormanager.staticset,
+        0,
+        null,
+    );
+    // D. INDIRECT DRAW
+    // Instead of specifying vertex count, we point to the buffer containing the commands.
+    c.vkCmdDrawIndirect(
+        cmd,
+        self.buffermanager.indirectbuffer.buffer,
+        0, // Offset in buffer (start at 0)
+        1, // Draw Count (We populated 3 commands in initTest)
+        @sizeOf(c.VkDrawIndirectCommand), // Stride
+    );
+    // c.vkCmdDraw(cmd, 3, 1, 0, 0);
+    // 4. Submit
+    frame.submitEnd(self);
+    self.framenumber +%= 1;
+    self.switch_frame();
 }

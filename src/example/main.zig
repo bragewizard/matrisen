@@ -7,18 +7,9 @@ const Vec3 = m.linalg.Vec3(f32);
 const Vec4 = m.linalg.Vec4(f32);
 const Mat4x4 = m.linalg.Mat4x4(f32);
 
-pub const SceneDataUniform = extern struct {
-    view: Mat4x4,
-    proj: Mat4x4,
-    viewproj: Mat4x4,
-    ambient_color: Vec4,
-    sunlight_dir: Vec4,
-    sunlight_color: Vec4,
-};
-
 const App = @This();
 
-// pub fn initScene(self: *App, core: *Core) void {
+// fn initScene(self: *App, core: *Core) void {
 
 // // const ico = gltf.load_meshes(core.cpuallocator, "assets/icosphere.glb") catch @panic("Failed to load mesh");
 // const numlinesx = 99;
@@ -106,27 +97,25 @@ const App = @This();
 pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
     var timer = std.time.Timer.start() catch @panic("Failed to start timer");
     var delta: u64 = undefined;
-    // var camerarot: Quat = .identity;
-    // var camerapos: Vec3 = .{ .x = 0, .y = -5, .z = 8 };
-    // camerarot.rotatePitch(std.math.degreesToRadians(60));
-    // camerarot.rotateYaw(std.math.degreesToRadians(180));
-    // camerarot.rotateRoll(std.math.degreesToRadians(180));
+    var camerarot: Quat = .identity;
+    var camerapos: Vec3 = .{ .x = 0, .y = -5, .z = 8 };
+    camerarot.rotatePitch(std.math.degreesToRadians(60));
+    camerarot.rotateYaw(std.math.degreesToRadians(180));
+    camerarot.rotateRoll(std.math.degreesToRadians(180));
 
-    m.Window.checkSdl(m.clibs.SDL_SetWindowRelativeMouseMode(window.handle, false));
-    window.state.capture_mouse = true;
     _ = self;
     // self.initScene(engine);
 
     while (!window.state.quit) {
         window.processInput();
-        // if (window.state.w) camerapos.translateForward(&camerarot, 0.1);
-        // if (window.state.s) camerapos.translateForward(&camerarot, -0.1);
-        // if (window.state.a) camerapos.translatePitch(&camerarot, -0.1);
-        // if (window.state.d) camerapos.translatePitch(&camerarot, 0.1);
-        // if (window.state.q) camerapos.translateWorldZ(-0.1);
-        // if (window.state.e) camerapos.translateWorldZ(0.1);
-        // camerarot.rotatePitch(-window.state.mouse_y / 150);
-        // camerarot.rotateWorldZ(-window.state.mouse_x / 150);
+        if (window.state.w) camerapos.translateForward(&camerarot, 0.1);
+        if (window.state.s) camerapos.translateForward(&camerarot, -0.1);
+        if (window.state.a) camerapos.translatePitch(&camerarot, -0.1);
+        if (window.state.d) camerapos.translatePitch(&camerarot, 0.1);
+        if (window.state.q) camerapos.translateWorldZ(-0.1);
+        if (window.state.e) camerapos.translateWorldZ(0.1);
+        camerarot.rotatePitch(-window.state.mouse_y / 150);
+        camerarot.rotateWorldZ(-window.state.mouse_x / 150);
         if (engine.framenumber % 100 == 0) {
             delta = timer.read();
             log.info("FPS: {d}                        \x1b[1A", .{
@@ -134,15 +123,7 @@ pub fn loop(self: *App, engine: *Core, window: *m.Window) void {
             });
             timer.reset();
         }
-        if (engine.resizerequest) {
-            engine.resize(window);
-            continue;
-        }
-        var frame = &engine.framecontexts[engine.current_frame];
-        frame.submitBegin(engine) catch continue;
-        // // self.uploadSceneData(engine, camerarot.view(camerapos));
-        // // engine.pipelines.vertexshader.draw(engine, frame);
-        frame.submitEnd(engine);
+        engine.nextFrame(window);
     }
 }
 

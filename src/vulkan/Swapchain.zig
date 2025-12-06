@@ -12,6 +12,7 @@ format: c.VkFormat = undefined,
 extent: c.VkExtent2D = .{},
 images: []c.VkImage = &.{},
 views: []c.VkImageView = &.{},
+semaphores: []c.VkSemaphore = &.{},
 
 const CreateOptions = struct {
     physical_device: c.VkPhysicalDevice,
@@ -75,7 +76,7 @@ pub fn init(
     physicaldevice: PhysicalDevice,
     device: c.VkDevice,
     surface: c.VkSurfaceKHR,
-    extent: c.VkExtent2D,
+    windowextent: c.VkExtent2D,
     allocationcallbacks: ?*c.VkAllocationCallbacks,
 ) Self {
     const old_swapchain = null;
@@ -95,27 +96,27 @@ pub fn init(
     }
     const present_mode = pickPresentMode(supportinfo.present_modes, vsync);
     // const present_mode_str = switch (present_mode) {
-    //     c.Vk_PRESENT_MODE_FIFO_RELAXED_KHR => "FIFO Relaxed",
-    //     c.Vk_PRESENT_MODE_MAILBOX_KHR => "Mailbox",
-    //     c.Vk_PRESENT_MODE_FIFO_KHR => "FIFO",
+    //     c.VK_PRESENT_MODE_FIFO_RELAXED_KHR => "FIFO Relaxed",
+    //     c.VK_PRESENT_MODE_MAILBOX_KHR => "Mailbox",
+    //     c.VK_PRESENT_MODE_FIFO_KHR => "FIFO",
     //     else => "unknown",
     // };
     // const format_str = switch (format.format) {
-    //     c.Vk_FORMAT_B8G8R8A8_SRGB => "B8G8R8A8 SRBG",
+    //     c.VK_FORMAT_B8G8R8A8_SRGB => "B8G8R8A8 SRBG",
     //     else => "unknown",
     // };
     // log.info("format: {s}, present mode: {s}", .{ format_str, present_mode_str });
-    var _extent = c.VkExtent2D{ .width = extent.width, .height = extent.height };
-    _extent.width = @max(supportinfo.capabilities.minImageExtent.width, @min(
+    var supportedextent = c.VkExtent2D{ .width = windowextent.width, .height = windowextent.height };
+    supportedextent.width = @max(supportinfo.capabilities.minImageExtent.width, @min(
         supportinfo.capabilities.maxImageExtent.width,
-        _extent.width,
+        supportedextent.width,
     ));
-    _extent.height = @max(supportinfo.capabilities.minImageExtent.height, @min(
+    supportedextent.height = @max(supportinfo.capabilities.minImageExtent.height, @min(
         supportinfo.capabilities.maxImageExtent.height,
-        _extent.height,
+        supportedextent.height,
     ));
     if (supportinfo.capabilities.currentExtent.width != std.math.maxInt(u32)) {
-        _extent = supportinfo.capabilities.currentExtent;
+        supportedextent = supportinfo.capabilities.currentExtent;
     }
 
     const image_count = blk: {
@@ -132,7 +133,7 @@ pub fn init(
         .minImageCount = image_count,
         .imageFormat = format.format,
         .imageColorSpace = format.colorSpace,
-        .imageExtent = extent,
+        .imageExtent = supportedextent,
         .imageArrayLayers = 1,
         .imageUsage = c.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | c.VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .preTransform = supportinfo.capabilities.currentTransform,
@@ -185,16 +186,30 @@ pub fn init(
     };
     errdefer allocator.free(swapchain_image_views);
 
-    for (swapchain_images, swapchain_image_views) |img, *view| {
+    const semaphores = allocator.alloc(c.VkSemaphore, swapchain_image_count) catch {
+        log.err("failed to alloc", .{});
+        @panic("");
+    };
+    errdefer allocator.free(semaphores);
+
+    const semaphore_ci = c.VkSemaphoreCreateInfo{ .sType = c.VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    for (swapchain_images, swapchain_image_views, semaphores) |img, *view, *semaphore| {
         view.* = createImageViews(device, img, format.format);
+        debug.checkVkPanic(c.vkCreateSemaphore(
+            device,
+            &semaphore_ci,
+            allocationcallbacks,
+            semaphore,
+        ));
     }
 
     return .{
         .handle = swapchain,
-        .extent = extent,
+        .extent = supportedextent,
         .format = format.format,
         .images = swapchain_images,
         .views = swapchain_image_views,
+        .semaphores = semaphores,
     };
 }
 
@@ -205,8 +220,9 @@ pub fn deinit(
     allocationcallbacks: ?*c.VkAllocationCallbacks,
 ) void {
     c.vkDestroySwapchainKHR(device, self.handle, allocationcallbacks);
-    for (self.views) |view| {
+    for (self.views, self.semaphores) |view, semaphore| {
         c.vkDestroyImageView(device, view, null);
+        c.vkDestroySemaphore(device, semaphore, allocationcallbacks);
     }
     allocator.free(self.views);
 }

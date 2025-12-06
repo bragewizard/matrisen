@@ -4,7 +4,7 @@ const checkVkPanic = @import("debug.zig").checkVkPanic;
 const log = std.log.scoped(.instance);
 const Core = @import("Core.zig");
 
-pub const api_version = c.VK_MAKE_VERSION(1, 3, 0);
+pub const api_version = c.VK_MAKE_VERSION(1, 4, 0);
 const Self = @This();
 
 handle: c.VkInstance = null,
@@ -117,7 +117,7 @@ pub fn init(alloc: std.mem.Allocator, allocationcallbacks: ?*c.VkAllocationCallb
 
     var instance: c.VkInstance = undefined;
     checkVkPanic(c.vkCreateInstance(&instance_info, allocationcallbacks, &instance));
-    log.info("Created vulkan instance.", .{});
+    log.info("Created vulkan instance", .{});
 
     const debug_messenger = if (debug) blk: {
         log.info("Created vulkan debug callback messenger.", .{});

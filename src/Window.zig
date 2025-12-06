@@ -57,9 +57,10 @@ pub const State = packed struct {
     d: bool = false,
     q: bool = false,
     e: bool = false,
+    tab: bool = false,
     quit: bool = false,
-    capture_mouse: bool = false,
-    resize_request: bool = false,
+    capturemouse: bool = false,
+    resizerequest: bool = false,
 };
 
 pub fn processInput(self: *Self) void {
@@ -73,15 +74,16 @@ pub fn processInput(self: *Self) void {
             },
             c.SDL_EVENT_KEY_DOWN => {
                 switch (event.key.scancode) {
-                    c.SDL_SCANCODE_TAB => {
-                        self.state.capture_mouse = !self.state.capture_mouse;
-                    },
                     c.SDL_SCANCODE_W => self.state.w = true,
                     c.SDL_SCANCODE_S => self.state.s = true,
                     c.SDL_SCANCODE_A => self.state.a = true,
                     c.SDL_SCANCODE_D => self.state.d = true,
                     c.SDL_SCANCODE_Q => self.state.q = true,
                     c.SDL_SCANCODE_E => self.state.e = true,
+                    c.SDL_SCANCODE_TAB => {
+                        self.state.tab = true;
+                        toggleMouseCapture(self);
+                    },
                     else => {},
                 }
             },
@@ -93,6 +95,10 @@ pub fn processInput(self: *Self) void {
                     c.SDL_SCANCODE_D => self.state.d = false,
                     c.SDL_SCANCODE_Q => self.state.q = false,
                     c.SDL_SCANCODE_E => self.state.e = false,
+                    c.SDL_SCANCODE_TAB => {
+                        self.state.tab = false;
+                        toggleMouseCapture(self);
+                    },
                     else => {},
                 }
             },
@@ -101,11 +107,22 @@ pub fn processInput(self: *Self) void {
                 self.state.mouse_y = event.motion.yrel;
             },
             c.SDL_EVENT_WINDOW_RESIZED => {
-                self.state.resize_request = true;
+                self.state.resizerequest = true;
             },
             else => {},
         }
     }
+}
+
+pub fn toggleMouseCapture(self: *Self) void {
+    const Last = struct {
+        var tab: bool = false;
+    };
+    if (self.state.tab and !Last.tab) {
+        self.state.capturemouse = !self.state.capturemouse;
+        checkSdl(c.SDL_SetWindowRelativeMouseMode(self.handle, self.state.capturemouse));
+    }
+    Last.tab = self.state.tab;
 }
 
 pub fn checkSdl(res: bool) void {
