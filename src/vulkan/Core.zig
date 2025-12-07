@@ -7,8 +7,11 @@
 const std = @import("std");
 const log = std.log.scoped(.core);
 const debug = @import("debug.zig");
+const linalg = @import("../linalg.zig");
 const c = @import("../clibs/clibs.zig").libs;
 
+const Quat = linalg.Quat(f32);
+const Vec3 = linalg.Vec3(f32);
 const Device = @import("Device.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
 const Swapchain = @import("Swapchain.zig");
@@ -204,48 +207,9 @@ fn setRenderScale(inputextent: c.VkExtent2D, scale: f32) c.VkExtent2D {
     return outextent;
 }
 
-// pub fn nextFrame(self: *Self, window: *Window) void {
-//     var frame = self.framecontexts[self.currentframe];
-//     frame.submitBegin(self) catch |err| {
-//         if (err == error.SwapchainOutOfDate or window.state.resizerequest) {
-//             self.resize(window);
-//             window.state.resizerequest = false;
-//             return;
-//         }
-//     };
-//     const cmd = frame.command_buffer;
-//     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipelinemanager.defaultpipeline);
-//     c.vkCmdBindDescriptorSets(
-//         cmd,
-//         c.VK_PIPELINE_BIND_POINT_GRAPHICS,
-//         self.pipelinemanager.pipelinelayout,
-//         0,
-//         1,
-//         &self.descriptormanager.dynamicsets[self.currentframe],
-//         0,
-//         null,
-//     );
-//     c.vkCmdBindDescriptorSets(
-//         cmd,
-//         c.VK_PIPELINE_BIND_POINT_GRAPHICS,
-//         self.pipelinemanager.pipelinelayout,
-//         1,
-//         1,
-//         &self.descriptormanager.staticset,
-//         0,
-//         null,
-//     );
-//     // c.vkCmdBindIndexBuffer(cmd, index.buffer, 0, c.VK_INDEX_TYPE_UINT32);
-//     // c.vkCmdDrawIndexedIndirect(cmd, indirect.buffer, 0, 1, @sizeOf(c.VkDrawIndexedIndirectCommand));
-//     c.vkCmdDraw(cmd, 3, 1, 0, 0);
-//     frame.submitEnd(self);
-//     self.framenumber +%= 1;
-//     self.switch_frame();
-// }
-
 pub fn nextFrame(self: *Self, window: *Window) void {
-    // 1. Handle Window State
     var frame = self.framecontexts[self.currentframe];
+    const cmd = frame.command_buffer;
     frame.submitBegin(self) catch |err| {
         if (err == error.SwapchainOutOfDate or window.state.resizerequest) {
             self.resize(window);
@@ -253,21 +217,7 @@ pub fn nextFrame(self: *Self, window: *Window) void {
             return;
         }
     };
-    // 2. CPU UPDATES (Animation & Camera)
-    // Rotate the cubes based on time
-    self.buffermanager.rotateDummy(self.currentframe, self.framenumber);
-    // Update Camera (Crucial! Otherwise you are inside the cube looking at nothing)
-    // We assume you added updateScene to BufferManager from the previous step.
-    const aspect = @as(f32, @floatFromInt(self.drawextent2d.width)) /
-        @as(f32, @floatFromInt(self.drawextent2d.height));
-    self.buffermanager.updateScene(self.currentframe, aspect);
-
-    // 3. RECORD COMMANDS
-    const cmd = frame.command_buffer;
     c.vkCmdBindPipeline(cmd, c.VK_PIPELINE_BIND_POINT_GRAPHICS, self.pipelinemanager.defaultpipeline);
-
-    // B. Bind Set 0 (Dynamic: Scene Data)
-    // We bind the specific dynamic set for THIS frame-in-flight
     c.vkCmdBindDescriptorSets(
         cmd,
         c.VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -278,25 +228,11 @@ pub fn nextFrame(self: *Self, window: *Window) void {
         0,
         null,
     );
-    // C. Bind Set 1 (Static: Bindless Tables)
-    // This set contains the MeshTable and InstanceTable
-    c.vkCmdBindDescriptorSets(
-        cmd,
-        c.VK_PIPELINE_BIND_POINT_GRAPHICS,
-        self.pipelinemanager.pipelinelayout,
-        1,
-        1,
-        &self.descriptormanager.staticset,
-        0,
-        null,
-    );
-    // D. INDIRECT DRAW
-    // Instead of specifying vertex count, we point to the buffer containing the commands.
     c.vkCmdDrawIndirect(
         cmd,
         self.buffermanager.indirectbuffer.buffer,
         0, // Offset in buffer (start at 0)
-        1, // Draw Count (We populated 3 commands in initTest)
+        4, // Becomes gl_DrawID in the shader
         @sizeOf(c.VkDrawIndirectCommand), // Stride
     );
     // c.vkCmdDraw(cmd, 3, 1, 0, 0);
@@ -304,4 +240,11 @@ pub fn nextFrame(self: *Self, window: *Window) void {
     frame.submitEnd(self);
     self.framenumber +%= 1;
     self.switch_frame();
+}
+
+pub fn updateScene(self: *Self, camerarot: Quat, camerapos: Vec3, time: f32) void {
+    // self.buffermanager.rotateDummy(self.currentframe, self.framenumber);
+    const aspect = @as(f32, @floatFromInt(self.drawextent2d.width)) /
+        @as(f32, @floatFromInt(self.drawextent2d.height));
+    self.buffermanager.updateScene(self.currentframe, aspect, camerarot, camerapos, time);
 }

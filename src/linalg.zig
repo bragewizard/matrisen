@@ -384,15 +384,14 @@ pub fn Mat4x4(comptime T: type) type {
             };
         }
 
-        pub fn lookAt(eye: Vec3(T), center: Vec3(T), up: Vec3(T)) Self {
-            // 1. Calculate Basis Vectors
-            const f = center.sub(eye).normalized(); // Forward (Center - Eye)
-            const s = f.cross(up).normalized(); // Right (Forward x Up)
-            const u = s.cross(f); // Up (Right x Forward)
+        pub fn lookAt(eye: Vec3(T), target: Vec3(T), up: Vec3(T)) Self {
+            // Forward = Target - Eye (Direction we are looking)
+            const f = target.sub(eye).normalized();
+            // Right = Forward x Up
+            const s = f.cross(up).normalized();
+            // Recalculated Up = Right x Forward
+            const u = s.cross(f);
 
-            // 2. Construct Matrix (Column-Major)
-            // The rotation part (transposed because it's an inverse rotation)
-            // The translation part (-dot product)
             return .{
                 .x = .{ .x = s.x, .y = u.x, .z = -f.x, .w = 0 },
                 .y = .{ .x = s.y, .y = u.y, .z = -f.y, .w = 0 },
@@ -400,7 +399,6 @@ pub fn Mat4x4(comptime T: type) type {
                 .w = .{ .x = -s.dot(eye), .y = -u.dot(eye), .z = f.dot(eye), .w = 1 },
             };
         }
-
         /// Returns a new matrix obtained by translating the input one.
         pub fn translate(self: Self, v: Vec3(T)) Self {
             return .{

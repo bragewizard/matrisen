@@ -11,8 +11,20 @@ struct Vertex {
     vec4 color;
 };
 
-layout(buffer_reference, scalar) readonly buffer Vertices { Vertex v[]; };
-layout(buffer_reference, scalar) readonly buffer Indices { uint i[]; };
+layout(buffer_reference, scalar) buffer Vertices { Vertex v[]; };
+layout(buffer_reference, scalar) buffer Indices { uint i[]; };
+
+struct ObjectData {
+    mat4 modelMatrix;
+    Vertices vertexBuffer; // 64-bit address
+    Indices  indexBuffer;  // 64-bit address
+    uint materialIndex;
+    uint _pad1;
+    uint _pad2;
+    uint _pad3;
+};
+
+layout(buffer_reference, scalar) buffer ObjectTable { ObjectData o[]; };
 
 // --- SET 0: GLOBALS (Your SceneData) ---
 layout(set = 0, binding = 0, std140) uniform SceneData {
@@ -22,29 +34,8 @@ layout(set = 0, binding = 0, std140) uniform SceneData {
     vec4 ambient_color;
     vec4 sun_direction;
     vec4 sun_color;
+    ObjectTable objects;
 } scene; // <--- Accessed as 'scene.viewproj'
-
-struct MeshData {
-    Vertices vertexBuffer; // 64-bit address
-    Indices  indexBuffer;  // 64-bit address
-    // Bounding box, LOD info, etc. could go here
-};
-
-layout(set = 1, binding = 0, std140) readonly buffer MeshTable {
-    MeshData meshes[];
-} meshTable;
-
-struct InstanceData {
-    mat4 modelMatrix;
-    uint meshIndex;
-    uint materialIndex;
-    uint _pad0;
-    uint _pad1;
-};
-
-layout(set = 1, binding = 1, std140) readonly buffer InstanceTable {
-    InstanceData instances[];
-} instanceTable;
 
 layout(location = 0) in vec3 inNormal;
 layout(location = 1) in vec3 inColor;
@@ -55,5 +46,5 @@ layout(location = 0) out vec4 outFragColor;
 void main()
 {
     vec3 color = inColor;
-    outFragColor = vec4(color, 1.0) * scene.ambient_color;
+    outFragColor = vec4(color, 1.0);
 }

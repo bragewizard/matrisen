@@ -18,8 +18,13 @@ transfer_queue: c.VkQueue,
 pub fn init(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Self {
     const alloc_cb: ?*c.VkAllocationCallbacks = null;
 
+    // var features14: c.VkPhysicalDeviceVulkan14Features = .{
+    //     .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+    //     .dynamicRenderingLocalRead = c.VK_TRUE,
+    // };
     var features13: c.VkPhysicalDeviceVulkan13Features = .{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        // .pNext = &features14,
         .dynamicRendering = c.VK_TRUE,
         .synchronization2 = c.VK_TRUE,
     };
@@ -40,9 +45,10 @@ pub fn init(alloc: std.mem.Allocator, physical_device: PhysicalDevice) Self {
     var deviceFeatures2: c.VkPhysicalDeviceFeatures2 = .{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &shader_draw_parameters_features,
+        .features = .{ .multiDrawIndirect = c.VK_TRUE },
     };
 
-    const meshshading: c.VkPhysicalDeviceMeshShaderFeaturesEXT = .{
+    var meshshading: c.VkPhysicalDeviceMeshShaderFeaturesEXT = .{
         .sType = c.VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
         .pNext = &deviceFeatures2,
         .taskShader = c.VK_TRUE,

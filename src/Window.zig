@@ -115,14 +115,8 @@ pub fn processInput(self: *Self) void {
 }
 
 pub fn toggleMouseCapture(self: *Self) void {
-    const Last = struct {
-        var tab: bool = false;
-    };
-    if (self.state.tab and !Last.tab) {
-        self.state.capturemouse = !self.state.capturemouse;
-        checkSdl(c.SDL_SetWindowRelativeMouseMode(self.handle, self.state.capturemouse));
-    }
-    Last.tab = self.state.tab;
+    self.state.capturemouse = !self.state.capturemouse;
+    checkSdl(c.SDL_SetWindowRelativeMouseMode(self.handle, self.state.capturemouse));
 }
 
 pub fn checkSdl(res: bool) void {
